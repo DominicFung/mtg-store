@@ -45,4 +45,5 @@ next-env.d.ts
 
 ._*
 web/._*
-web/.next
+web/.next/
+.next/
