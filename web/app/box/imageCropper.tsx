@@ -4,18 +4,27 @@ import JSZip from "jszip";
 
 interface Props {
   imageSrc: string,
+
+
+
   setCrops: (a: [string, string, string]) => void
 }
 
 const BOX_WIDTHS = [293, 255, 293];
 const ORIGINAL_HEIGHT = 326;
 const TOTAL_ORIGINAL_WIDTH = BOX_WIDTHS.reduce((a, b) => a + b, 0);
-const GAP = 10;
+
+const DOWNLOAD = false
 
 export default function GroupedCropBoxes({ imageSrc, setCrops }: Props) {
   const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
   const [groupBox, setGroupBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [croppedImages, setCroppedImages] = useState<string[]>([]);
+
+  // const setGroupBox = (s: {x: number, y: number, width: number, height: number}) => {
+  //   console.log(`setGroupBox ${s.x}, ${s.y}, ${s.width}, ${s.height}`)
+  //   _setGroupBox(s)
+  // }
 
   const calculateFittingSize = (imgW: number, imgH: number) => {
     const scaleX = imgW / TOTAL_ORIGINAL_WIDTH;
@@ -39,6 +48,12 @@ export default function GroupedCropBoxes({ imageSrc, setCrops }: Props) {
       setGroupBox(initialBox);
     }
   }, [imgDimensions]);
+
+  useEffect(() => {
+    if (imageSrc && groupBox.width && groupBox.height) {
+      handleCropAndDownload();
+    }
+  }, [groupBox, imageSrc]);
 
   const handleCropAndDownload = async () => {
     const img = new Image();
@@ -91,12 +106,14 @@ export default function GroupedCropBoxes({ imageSrc, setCrops }: Props) {
     setCrops(crops)
 
     //Generate and download ZIP
-    const content = await zip.generateAsync({ type: "blob" });
-    const zipUrl = URL.createObjectURL(content);
-    const link = document.createElement("a");
-    link.href = zipUrl;
-    link.download = "cropped-images.zip";
-    link.click();
+    if (DOWNLOAD) {
+      const content = await zip.generateAsync({ type: "blob" });
+      const zipUrl = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = zipUrl;
+      link.download = "cropped-images.zip";
+      link.click();
+    }
   };
 
   return (
@@ -179,28 +196,6 @@ export default function GroupedCropBoxes({ imageSrc, setCrops }: Props) {
           </Rnd>
         )}
       </div>
-
-      <button
-        className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
-        onClick={handleCropAndDownload}
-      >
-        Crop and Download
-      </button>
-
-      {/* Preview */}
-      {croppedImages.length > 0 && (
-        <div className="mt-4 flex gap-[10px]">
-          {croppedImages.map((src, i) => (
-            <img
-              key={i}
-              src={src}
-              alt={`Crop ${i + 1}`}
-              className="border border-gray-300 rounded shadow"
-              style={{ maxHeight: "200px" }}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
