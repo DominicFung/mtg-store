@@ -4,25 +4,31 @@ import Image from 'next/image';
 
 import manaBackground from './assets/mana-bg.png'; // Make sure this path is correct
 import logo from './assets/mana-ramp-logo.png'; // Optional logo
+import ProductCard from './productCard';
 
 const products = [
   {
     name: 'Custom Deck Box',
     description: 'Upload your art and create a unique deck box.',
     link: '/box',
-    image: '/images/deck-box-thumbnail.jpg',
+    images: [
+      '/images/1F382F41-E88E-4192-815E-756C3A653F2D_1_105_c.jpeg', 
+      '/images/19C48FF5-CF48-4199-9D53-A6DB3112BDC8_1_105_c.jpeg',
+      '/images/1801181C-5A70-41EF-BFDA-E37758F04E91_1_105_c.jpeg',
+      '/images/B24D1D86-3792-46B5-A4F6-51A094D4A847_1_105_c.jpeg'
+    ]
   },
   {
     name: 'Mana Token Set',
     description: 'Premium resin tokens for each mana color.',
     link: '/tokens',
-    image: '/images/mana-tokens-thumbnail.jpg',
+    images: ['/images/mana-tokens-thumbnail.jpg']
   },
   {
     name: 'Commander Life Counter',
     description: 'Track your life total with style.',
     link: '/life-counter',
-    image: '/images/life-counter-thumbnail.jpg',
+    images: ['/images/life-counter-thumbnail.jpg']
   },
 ];
 
@@ -49,19 +55,7 @@ export default function FrontPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
         {products.map((product) => (
-          <Link href={product.link} key={product.name}>
-            <div className="bg-gray-900 bg-opacity-70 p-4 rounded-xl shadow-lg hover:scale-105 transition transform">
-              <Image
-                src={product.image}
-                alt={product.name}
-                width={400} // or whatever size you want
-                height={300}
-                className="w-full h-48 object-cover rounded-lg mb-4"
-              />
-              <h3 className="text-xl text-[#e2c275] font-semibold mb-2">{product.name}</h3>
-              <p className="text-gray-300 text-sm">{product.description}</p>
-            </div>
-          </Link>
+          <ProductCard key={product.name} product={product} />
         ))}
       </div>
 

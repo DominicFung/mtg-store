@@ -4,14 +4,19 @@ import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ImageCropper from './imageCropper';
 import SpinningBoxWithTextures from './spinningBox';
+import { useCart } from '../lib/useCart'
+import JSZip from "jszip";
 
 import img from './sample.webp'
 
 const TEST = false
+const DOWNLOAD = true
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
   const [crops, setCrops] = useState<[string, string, string]>(["", "", ""]);
+  const [zip, setZip] = useState<JSZip|null>(null)
+  const { addItem } = useCart();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -45,6 +50,15 @@ export default function Home() {
     onDrop(f)
   }
 
+  const downloadAsZip = async (zip: JSZip) => {
+    const content = await zip.generateAsync({ type: "blob" });
+    const zipUrl = URL.createObjectURL(content);
+    const link = document.createElement("a");
+    link.href = zipUrl;
+    link.download = "cropped-images.zip";
+    link.click();
+  }
+
   return (
     <div className="bg-gradient-to-b from-[#1a1a2e] to-[#16213e] min-h-screen text-white font-serif p-8">
       <header className="text-center mb-8">
@@ -72,7 +86,19 @@ export default function Home() {
         {crops && <div className="my-6 p-4 rounded-xl bg-gray-800 shadow-lg">
           <h3 className="text-lg mb-2 text-center font-semibold">Preview Your Custom Deck Box</h3>
           <SpinningBoxWithTextures textures={crops} glbPath="/models/edh_box_v1.glb" />
-          <button className="mt-4 bg-[#e2c275] text-black px-6 py-2 rounded-md hover:brightness-110 transition block mx-auto">
+          <button disabled={zip === null && crops.length >= 3 && crops[0] === ""}
+            onClick={() => {
+              addItem({
+                id: 'custom-deck-box',
+                name: 'Custom Deck Box',
+                quantity: 1,
+                images: crops,
+              })
+
+              if (DOWNLOAD && zip) { downloadAsZip(zip) }
+              }
+            }
+            className="mt-4 bg-[#e2c275] disabled:bg-gray-300 text-black disabled:text-gray-500 px-6 py-2 rounded-md hover:brightness-110 disabled:hover:brightness-100 transition block mx-auto">
             Add to Cart
           </button>
         </div> }
@@ -80,7 +106,7 @@ export default function Home() {
         {image && (
           <>
             <h3 className="text-xl font-medium">Crop Your Image</h3>
-            <ImageCropper imageSrc={image} setCrops={setCrops} />
+            <ImageCropper imageSrc={image} setCrops={setCrops} setZip={setZip} />
           </>
         )}
       </section>

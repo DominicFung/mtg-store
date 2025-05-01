@@ -1,0 +1,1 @@
+export type Classification = 'ramp' | 'non-ramp';

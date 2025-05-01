@@ -4,10 +4,8 @@ import JSZip from "jszip";
 
 interface Props {
   imageSrc: string,
-
-
-
   setCrops: (a: [string, string, string]) => void
+  setZip: (a: JSZip) => void
 }
 
 const BOX_WIDTHS = [293, 255, 293];
@@ -16,10 +14,9 @@ const TOTAL_ORIGINAL_WIDTH = BOX_WIDTHS.reduce((a, b) => a + b, 0);
 
 const DOWNLOAD = false
 
-export default function GroupedCropBoxes({ imageSrc, setCrops }: Props) {
+export default function GroupedCropBoxes({ imageSrc, setCrops, setZip }: Props) {
   const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
   const [groupBox, setGroupBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [croppedImages, setCroppedImages] = useState<string[]>([]);
 
   // const setGroupBox = (s: {x: number, y: number, width: number, height: number}) => {
   //   console.log(`setGroupBox ${s.x}, ${s.y}, ${s.width}, ${s.height}`)
@@ -102,8 +99,8 @@ export default function GroupedCropBoxes({ imageSrc, setCrops }: Props) {
       xOffset += boxWidth;
     }
 
-    setCroppedImages(previews);
     setCrops(crops)
+    setZip(zip)
 
     //Generate and download ZIP
     if (DOWNLOAD) {

@@ -47,3 +47,5 @@ next-env.d.ts
 web/._*
 web/.next/
 .next/
+
+node_modules/
