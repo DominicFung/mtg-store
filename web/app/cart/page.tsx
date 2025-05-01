@@ -1,7 +1,6 @@
-"use Client"
+"use client"
 
 import { useCart } from '../lib/useCart';
-import AppBar from '../components/appBar';
 
 export default function CartPage() {
   const { items, removeItem, clearCart } = useCart();
