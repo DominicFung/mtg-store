@@ -1,0 +1,34 @@
+{
+  "version": "41.0.0",
+  "files": {
+    "0059ce1df393e3b725205ba0c435b9d03cf9c43ba0c310426af737ec62d6cbec": {
+      "displayName": "mtgstore-S3Stack/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
+      "source": {
+        "path": "asset.0059ce1df393e3b725205ba0c435b9d03cf9c43ba0c310426af737ec62d6cbec",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "0059ce1df393e3b725205ba0c435b9d03cf9c43ba0c310426af737ec62d6cbec.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "fd4d187990bd75d3bd6cafc1cbec5d76ecea64c8ac5f5ed85527543a02c4e976": {
+      "displayName": "mtgstore-S3Stack Template",
+      "source": {
+        "path": "mtgstore-S3Stack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "fd4d187990bd75d3bd6cafc1cbec5d76ecea64c8ac5f5ed85527543a02c4e976.json",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

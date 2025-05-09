@@ -1,0 +1,650 @@
+{
+  "version": "41.0.0",
+  "artifacts": {
+    "mtgstore-S3Stack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "mtgstore-S3Stack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "mtgstore-S3Stack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "mtgstore-S3Stack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/fd4d187990bd75d3bd6cafc1cbec5d76ecea64c8ac5f5ed85527543a02c4e976.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "mtgstore-S3Stack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "mtgstore-S3Stack.assets"
+      ],
+      "metadata": {
+        "/mtgstore-S3Stack/mtgstore-Bucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreBucket97F8318E"
+          }
+        ],
+        "/mtgstore-S3Stack/mtgstore-Bucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreBucketPolicy0D3E4249"
+          }
+        ],
+        "/mtgstore-S3Stack/mtgstore-Bucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreBucketAutoDeleteObjectsCustomResourceBCB4E7E1"
+          }
+        ],
+        "/mtgstore-S3Stack/LatestNodeRuntimeMap": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LatestNodeRuntimeMap"
+          }
+        ],
+        "/mtgstore-S3Stack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/mtgstore-S3Stack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/mtgstore-S3Stack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+          }
+        ],
+        "/mtgstore-S3Stack/bucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "bucketName"
+          }
+        ],
+        "/mtgstore-S3Stack/bucketArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "bucketArn"
+          }
+        ],
+        "/mtgstore-S3Stack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/mtgstore-S3Stack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/mtgstore-S3Stack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/mtgstore-S3Stack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "mtgstore-S3Stack"
+    },
+    "mtgstore-DynamoStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "mtgstore-DynamoStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "mtgstore-DynamoStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "mtgstore-DynamoStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/49b190f5d524fa24a1fea5a204d8db526b6769caee5f7c91e33b6db245ab5e0f.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "mtgstore-DynamoStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "mtgstore-DynamoStack.assets"
+      ],
+      "metadata": {
+        "/mtgstore-DynamoStack/CardTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "CardTable8A445480"
+            }
+          }
+        ],
+        "/mtgstore-DynamoStack/CardTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CardTable8A445480"
+          }
+        ],
+        "/mtgstore-DynamoStack/mtgstore-CardTable-Name": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreCardTableName"
+          }
+        ],
+        "/mtgstore-DynamoStack/mtgstore-CardTable-Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreCardTableArn"
+          }
+        ],
+        "/mtgstore-DynamoStack/mtgstore-UserTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "mtgstoreUserTableDE865BD8"
+            }
+          }
+        ],
+        "/mtgstore-DynamoStack/mtgstore-UserTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreUserTableDE865BD8"
+          }
+        ],
+        "/mtgstore-DynamoStack/mtgstore-UserTable-Name": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreUserTableName"
+          }
+        ],
+        "/mtgstore-DynamoStack/mtgstore-UserTable-Arn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreUserTableArn"
+          }
+        ],
+        "/mtgstore-DynamoStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/mtgstore-DynamoStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/mtgstore-DynamoStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/mtgstore-DynamoStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "mtgstore-DynamoStack"
+    },
+    "mtgstore-AppsyncStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "mtgstore-AppsyncStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "mtgstore-AppsyncStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "mtgstore-AppsyncStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/3ea12a355efd2cd2b3bffc4138a379ed947b130893f358683939769c58aa3c13.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "mtgstore-AppsyncStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "mtgstore-DynamoStack",
+        "mtgstore-AppsyncStack.assets"
+      ],
+      "metadata": {
+        "/mtgstore-AppsyncStack": [
+          {
+            "type": "aws:cdk:warning",
+            "data": "If you are relying on AWS SDK v2 to be present in the Lambda environment already, please explicitly configure a NodeJS runtime of Node 16 or lower. [ack: @aws-cdk/aws-lambda-nodejs:sdkV2NotInRuntime]",
+            "trace": [
+              "Annotations.addMessage (/Volumes/Dom/Projects/mtg-store/aws/node_modules/aws-cdk-lib/core/lib/annotations.js:1:1608)",
+              "Annotations.addWarningV2 (/Volumes/Dom/Projects/mtg-store/aws/node_modules/aws-cdk-lib/core/lib/annotations.js:1:825)",
+              "new Bundling (/Volumes/Dom/Projects/mtg-store/aws/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:3762)",
+              "Function.bundle (/Volumes/Dom/Projects/mtg-store/aws/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:1066)",
+              "new NodejsFunction (/Volumes/Dom/Projects/mtg-store/aws/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/function.js:1:2288)",
+              "new AppsyncStack (/Volumes/Dom/Projects/mtg-store/aws/stacks/appsync-stack.ts:87:30)",
+              "Object.<anonymous> (/Volumes/Dom/Projects/mtg-store/aws/infra.ts:15:22)",
+              "Module._compile (node:internal/modules/cjs/loader:1562:14)",
+              "Module.m._compile (/Users/dominicfung/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/index.ts:1618:23)",
+              "node:internal/modules/cjs/loader:1699:10",
+              "Object.require.extensions.<computed> [as .ts] (/Users/dominicfung/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/index.ts:1621:12)",
+              "Module.load (node:internal/modules/cjs/loader:1313:32)",
+              "Function._load (node:internal/modules/cjs/loader:1123:12)",
+              "TracingChannel.traceSync (node:diagnostics_channel:322:14)",
+              "wrapModuleLoad (node:internal/modules/cjs/loader:217:24)",
+              "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:170:5)",
+              "phase4 (/Users/dominicfung/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:649:14)",
+              "bootstrap (/Users/dominicfung/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:95:10)",
+              "main (/Users/dominicfung/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:55:10)",
+              "Object.<anonymous> (/Users/dominicfung/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:800:3)",
+              "Module._compile (node:internal/modules/cjs/loader:1562:14)",
+              "Object.<anonymous> (node:internal/modules/cjs/loader:1699:10)",
+              "Module.load (node:internal/modules/cjs/loader:1313:32)",
+              "Function._load (node:internal/modules/cjs/loader:1123:12)",
+              "TracingChannel.traceSync (node:diagnostics_channel:322:14)",
+              "wrapModuleLoad (node:internal/modules/cjs/loader:217:24)",
+              "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:170:5)",
+              "node:internal/main/run_main_module:36:49"
+            ]
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/GraphQLAPI/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncGraphQLAPI171246D2"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/GraphQLAPI/TransformerSchema": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncGraphQLAPITransformerSchema29A480B4"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/GraphQLAPI/DefaultApiKey": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncGraphQLAPIDefaultApiKeyF3FEEDD7"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/GraphQLAPI/NONE_DS": [
+          {
+            "type": "graphqltransformer:resourceName",
+            "data": "NONE_DS"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/GraphQLAPI/NONE_DS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncGraphQLAPINONEDS21797BC3"
+          },
+          {
+            "type": "graphqltransformer:resourceName",
+            "data": "NONE_DS"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncAmplifyCodegenAssetsAmplifyCodegenAssetsBucket53CEF49C"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncAmplifyCodegenAssetsAmplifyCodegenAssetsBucketPolicyCFB2EE28"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncAmplifyCodegenAssetsAmplifyCodegenAssetsBucketAutoDeleteObjectsCustomResource3626BB24"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsDeployment/AwsCliLayer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncAmplifyCodegenAssetsAmplifyCodegenAssetsDeploymentAwsCliLayer68BB4C79"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsDeployment/CustomResource-1536MiB/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncAmplifyCodegenAssetsAmplifyCodegenAssetsDeploymentCustomResource1536MiB9D7E6635"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/L2GraphqlApi/mtgstoreSearchCardByNameDS/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncL2GraphqlApimtgstoreSearchCardByNameDSServiceRole63E8407F"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/L2GraphqlApi/mtgstoreSearchCardByNameDS/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncL2GraphqlApimtgstoreSearchCardByNameDSServiceRoleDefaultPolicy636F9935"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/L2GraphqlApi/mtgstoreSearchCardByNameDS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncL2GraphqlApimtgstoreSearchCardByNameDSE91EE764"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-Appsync/L2GraphqlApi/mtgstore-SearchCardByNameResolver/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncL2GraphqlApimtgstoreSearchCardByNameResolver7460AE52"
+          }
+        ],
+        "/mtgstore-AppsyncStack/LatestNodeRuntimeMap": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LatestNodeRuntimeMap"
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiB": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-singleton",
+            "data": true
+          },
+          {
+            "type": "aws:cdk:is-custom-resource-handler-runtime-family",
+            "data": 2
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiB/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiBServiceRoleA41FC8C2"
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiB/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiBServiceRoleDefaultPolicyFF1C635B"
+          }
+        ],
+        "/mtgstore-AppsyncStack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiB/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiBC5D8AB21"
+          }
+        ],
+        "/mtgstore-AppsyncStack/awsAppsyncApiId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "awsAppsyncApiId"
+          }
+        ],
+        "/mtgstore-AppsyncStack/awsAppsyncApiEndpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "awsAppsyncApiEndpoint"
+          }
+        ],
+        "/mtgstore-AppsyncStack/awsAppsyncAuthenticationType": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "awsAppsyncAuthenticationType"
+          }
+        ],
+        "/mtgstore-AppsyncStack/awsAppsyncRegion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "awsAppsyncRegion"
+          }
+        ],
+        "/mtgstore-AppsyncStack/amplifyApiModelSchemaS3Uri": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "amplifyApiModelSchemaS3Uri"
+          }
+        ],
+        "/mtgstore-AppsyncStack/awsAppsyncApiKey": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "awsAppsyncApiKey"
+          }
+        ],
+        "/mtgstore-AppsyncStack/GraphQLAPIURL": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphQLAPIURL"
+          }
+        ],
+        "/mtgstore-AppsyncStack/GraphQLAPIKey": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GraphQLAPIKey"
+          }
+        ],
+        "/mtgstore-AppsyncStack/Stack Region": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StackRegion"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-AppsyncId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncId"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-AppsyncArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncArn"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-AppsyncLambdaRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAppsyncLambdaRoleA262E875"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-InlinePolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreInlinePolicyC9363A0F"
+          }
+        ],
+        "/mtgstore-AppsyncStack/mtgstore-SearchCardByName/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreSearchCardByName018D56BC"
+          }
+        ],
+        "/mtgstore-AppsyncStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/mtgstore-AppsyncStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/mtgstore-AppsyncStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/mtgstore-AppsyncStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "mtgstore-AppsyncStack"
+    },
+    "mtgstore-IamStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "mtgstore-IamStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "mtgstore-IamStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "mtgstore-IamStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/b89273809ee1b5bb4cfb41bbaf965570d147a25dc9f3acdf0bd47ec229489f69.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "mtgstore-IamStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "mtgstore-S3Stack",
+        "mtgstore-IamStack.assets"
+      ],
+      "metadata": {
+        "/mtgstore-IamStack/mtgstore-User/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreUser197A1DC8"
+          }
+        ],
+        "/mtgstore-IamStack/mtgstore-InlinePolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreInlinePolicyC9363A0F"
+          }
+        ],
+        "/mtgstore-IamStack/mtgstore-AccessKey/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAccessKey8B1154E0"
+          }
+        ],
+        "/mtgstore-IamStack/mtgstore-AccessKey-Id": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreAccessKeyId"
+          }
+        ],
+        "/mtgstore-IamStack/mtgstore-SecretKey": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "mtgstoreSecretKey"
+          }
+        ],
+        "/mtgstore-IamStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/mtgstore-IamStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/mtgstore-IamStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/mtgstore-IamStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "mtgstore-IamStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  },
+  "minimumCliVersion": "2.1005.0"
+}

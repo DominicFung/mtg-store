@@ -1,0 +1,20 @@
+{
+  "version": "41.0.0",
+  "files": {
+    "b89273809ee1b5bb4cfb41bbaf965570d147a25dc9f3acdf0bd47ec229489f69": {
+      "displayName": "mtgstore-IamStack Template",
+      "source": {
+        "path": "mtgstore-IamStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "b89273809ee1b5bb4cfb41bbaf965570d147a25dc9f3acdf0bd47ec229489f69.json",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

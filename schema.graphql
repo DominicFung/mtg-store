@@ -1,0 +1,9 @@
+type Card {
+  id: ID!
+  name: String!
+  isRamp: Boolean!
+}
+
+type Query {
+  searchCardByName(name: String!): [Card]
+}

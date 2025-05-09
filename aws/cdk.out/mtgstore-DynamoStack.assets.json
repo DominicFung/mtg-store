@@ -1,0 +1,20 @@
+{
+  "version": "41.0.0",
+  "files": {
+    "49b190f5d524fa24a1fea5a204d8db526b6769caee5f7c91e33b6db245ab5e0f": {
+      "displayName": "mtgstore-DynamoStack Template",
+      "source": {
+        "path": "mtgstore-DynamoStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "49b190f5d524fa24a1fea5a204d8db526b6769caee5f7c91e33b6db245ab5e0f.json",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

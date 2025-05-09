@@ -1,0 +1,25 @@
+{
+  "name": "mtg-store-aws",
+  "version": "1.0.0",
+  "description": "Backend for Magic the gathering store - The Mana Ramp (themanaramp.ca)",
+  "scripts": {
+    "postinstall": "(cd lambdas && npm install);",
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "deploy": "../scripts/aws-deploy.sh",
+    "deploy:bak": "tsc & cdk deploy --all --outputs-file ./cdk-outputs.json --profile a1 --require-approval never && cp -f cdk-outputs.json ../cdk-outputs.json && cd ../ && ./scripts/update-secret.sh"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.11.6",
+    "@types/uuid": "^9.0.7",
+    "esbuild": "^0.19.12",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@aws-amplify/graphql-api-construct": "^1.20.1",
+    "aws-cdk-lib": "^2.122.0"
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "version": "41.0.0",
+  "files": {
+    "0059ce1df393e3b725205ba0c435b9d03cf9c43ba0c310426af737ec62d6cbec": {
+      "displayName": "mtgstore-AppsyncStack/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
+      "source": {
+        "path": "asset.0059ce1df393e3b725205ba0c435b9d03cf9c43ba0c310426af737ec62d6cbec",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "0059ce1df393e3b725205ba0c435b9d03cf9c43ba0c310426af737ec62d6cbec.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "9fcc7982f8c406cc6c4c94181b74b17c5689e4a2287502d9b39309b75fac84a8": {
+      "displayName": "mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsDeployment/AwsCliLayer/Code",
+      "source": {
+        "path": "asset.9fcc7982f8c406cc6c4c94181b74b17c5689e4a2287502d9b39309b75fac84a8.zip",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "9fcc7982f8c406cc6c4c94181b74b17c5689e4a2287502d9b39309b75fac84a8.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "f19954d123c11ab38a4fe691fda3c8e51b5050a5d0a04982855bb5a0956f78b4": {
+      "displayName": "Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1536MiB/Code",
+      "source": {
+        "path": "asset.f19954d123c11ab38a4fe691fda3c8e51b5050a5d0a04982855bb5a0956f78b4",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "f19954d123c11ab38a4fe691fda3c8e51b5050a5d0a04982855bb5a0956f78b4.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "0e66360f79501f2f9f67d25765edd953287774836b0ab1255cfce859f4038cc5": {
+      "displayName": "mtgstore-Appsync/AmplifyCodegenAssets/AmplifyCodegenAssetsDeployment/Asset1",
+      "source": {
+        "path": "asset.0e66360f79501f2f9f67d25765edd953287774836b0ab1255cfce859f4038cc5",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "0e66360f79501f2f9f67d25765edd953287774836b0ab1255cfce859f4038cc5.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "172d3db64af747d4c11d25f9066364b7338b9ce16e771eaed0c9e89b8aa47eb2": {
+      "displayName": "mtgstore-SearchCardByName/Code",
+      "source": {
+        "path": "asset.172d3db64af747d4c11d25f9066364b7338b9ce16e771eaed0c9e89b8aa47eb2",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "172d3db64af747d4c11d25f9066364b7338b9ce16e771eaed0c9e89b8aa47eb2.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "909165d846eb4f1392c7269ce76c37c19916816ec0298545cae61629021ceae3": {
+      "displayName": "mtgstore-Appsync/GraphQLAPI/schema",
+      "source": {
+        "path": "asset.909165d846eb4f1392c7269ce76c37c19916816ec0298545cae61629021ceae3.graphql",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "909165d846eb4f1392c7269ce76c37c19916816ec0298545cae61629021ceae3.graphql",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "3ea12a355efd2cd2b3bffc4138a379ed947b130893f358683939769c58aa3c13": {
+      "displayName": "mtgstore-AppsyncStack Template",
+      "source": {
+        "path": "mtgstore-AppsyncStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "3ea12a355efd2cd2b3bffc4138a379ed947b130893f358683939769c58aa3c13.json",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

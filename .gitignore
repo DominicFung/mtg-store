@@ -48,4 +48,8 @@ web/._*
 web/.next/
 .next/
 
+cdk-outputs.json
 node_modules/
+aws/**/*.js
+aws/cdk.out/*
+schema.graphql
