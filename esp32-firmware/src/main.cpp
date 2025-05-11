@@ -14,10 +14,22 @@ bool isRampCard = false;
 class MyCallbacks: public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
     std::string value = pCharacteristic->getValue();
+
+    Serial.print("Raw received value: ");
+    Serial.println(value.c_str()); // print raw string
+
+    for (int i = 0; i < value.length(); i++) {
+      Serial.print("Byte[");
+      Serial.print(i);
+      Serial.print("]: ");
+      Serial.println((int)value[i]);
+    }
     
     if (value == "RAMP") {
+      Serial.println("Device sent: RAMP");
       isRampCard = true;
     } else if (value == "NONRAMP") {
+      Serial.println("Device sent: NONRAMP");
       isRampCard = false;
     }
   }
@@ -34,7 +46,7 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
 
   // BLE setup
-  BLEDevice::init("ManaRampESP32");
+  BLEDevice::init("TheManaRamp");
   BLEServer *pServer = BLEDevice::createServer();
   
   BLEService *pService = pServer->createService("4fafc201-1fb5-459e-8fcc-c5c9c331914b");

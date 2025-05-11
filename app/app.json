@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mana-ramp-app",
-    "slug": "mana-ramp-app",
+    "name": "manarampapp",
+    "slug": "manarampapp",
     "version": "1.0.0",
     "web": {
       "favicon": "./assets/favicon.png"

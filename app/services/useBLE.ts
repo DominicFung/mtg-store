@@ -1,6 +1,7 @@
 import { BleManager, Device } from 'react-native-ble-plx';
 import { useEffect, useState } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
+import { Buffer } from 'buffer';
 
 const bleManager = new BleManager();
 
@@ -25,6 +26,7 @@ export function useBluetooth() {
   };
 
   const connectToDevice = async () => {
+    console.log("Connect to Devices ...")
     await requestPermissions();
     bleManager.startDeviceScan(null, null, (error, scannedDevice) => {
       if (error) {
@@ -32,7 +34,15 @@ export function useBluetooth() {
         return;
       }
 
-      if (scannedDevice?.name?.includes('ManaESP')) {
+      console.log("Listing all devices.")
+      if (scannedDevice && scannedDevice.name) {
+        console.log("Devices found, may be unrelated:")
+        console.debug('Found Unrelated Device:', scannedDevice.name);
+      } else {
+        console.log(`No Scanned devices found.`)
+      }
+
+      if (scannedDevice?.name?.includes('TheManaRamp')) {
         console.log('Found device:', scannedDevice.name);
         bleManager.stopDeviceScan();
 
@@ -54,17 +64,20 @@ export function useBluetooth() {
       console.warn('No device connected.');
       return;
     }
-
+  
     await device.discoverAllServicesAndCharacteristics();
     const services = await device.services();
     const service = services[0];
     const characteristics = await service.characteristics();
     const characteristic = characteristics[0];
-
+  
+    // Encode the command as base64
+    const base64Command = Buffer.from(command, 'utf-8').toString('base64');
+  
     if (characteristic.isWritableWithResponse) {
-      await characteristic.writeWithResponse(command);
+      await characteristic.writeWithResponse(base64Command);
     } else if (characteristic.isWritableWithoutResponse) {
-      await characteristic.writeWithoutResponse(command);
+      await characteristic.writeWithoutResponse(base64Command);
     } else {
       console.warn('Characteristic is not writable');
     }

@@ -1,6 +1,6 @@
 {
   "cesVersion": "2.14.3",
-  "projectName": "mana-ramp-app",
+  "projectName": "manarampapp",
   "packages": [
     {
       "name": "nativewind",
