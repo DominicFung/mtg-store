@@ -20,6 +20,9 @@ export class AppsyncStack extends Stack {
     const cardDynamoName = Fn.importValue(`${props.name}-CardTable-Name`)
     const cardDynamoArn = Fn.importValue(`${props.name}-CardTable-Arn`)
 
+    const filamentDynamoName = Fn.importValue(`${props.name}-FilamentTable-Name`)
+    const filamentDynamoArn = Fn.importValue(`${props.name}-FilamentTable-Arn`)
+
     const appsync = new AmplifyGraphqlApi(this, `${props.name}-Appsync`, {
       apiName: `${props.name}`,
       definition: AmplifyGraphqlDefinition.fromFiles(path.join(__dirname, "../", 'schema.graphql')),
@@ -62,7 +65,7 @@ export class AppsyncStack extends Stack {
           new PolicyStatement({
             actions: [ "dynamodb:*" ],
             resources: [ 
-              `${userDynamoArn}*`, `${cardDynamoArn}*`
+              `${userDynamoArn}*`, `${cardDynamoArn}*`, `${filamentDynamoArn}*`
             ]
           }),
           new PolicyStatement({
@@ -80,6 +83,7 @@ export class AppsyncStack extends Stack {
       environment: { 
         USER_TABLE_NAME: userDynamoName,
         CARD_TABLE_NAME: cardDynamoName,
+        FILAMENT_TABLE_NAME: filamentDynamoName,
       },
       runtime: Runtime.NODEJS_22_X,
     }
@@ -94,6 +98,18 @@ export class AppsyncStack extends Stack {
     .createResolver(`${props.name}-SearchCardByNameResolver`, {
       typeName: "Query",
       fieldName: "searchCardByName"
+    })
+
+    const listFilaments = new NodejsFunction(this, `${props.name}-ListFilaments`, {
+      entry: join(__dirname, '../lambdas', 'appsync', 'filament', 'listFilaments.ts'),
+      timeout: Duration.seconds(30),
+      ...nodeJsFunctionProps,
+    })
+
+    appsync.addLambdaDataSource(`${props.name}ListFilamentsDS`, listFilaments)
+    .createResolver(`${props.name}-ListFilamentsResolver`, {
+      typeName: "Query",
+      fieldName: "listFilaments"
     })
   }
 }

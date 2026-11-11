@@ -64,5 +64,23 @@ export class DynamoStack extends Stack {
       value: userTable.tableArn,
       exportName: `${props.name}-UserTable-Arn`
     })
+
+    // Catalogue of filaments sold for the HueForge-style deck box.
+    // Retained on stack delete, same as the card table.
+    const filamentTable = new Table(this, 'FilamentTable', {
+      partitionKey: { name: 'filamentId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      tableName: `${props.name}-FilamentTable`,
+    });
+
+    new CfnOutput(this, `${props.name}-FilamentTable-Name`, {
+      value: filamentTable.tableName,
+      exportName: `${props.name}-FilamentTable-Name`
+    })
+
+    new CfnOutput(this, `${props.name}-FilamentTable-Arn`, {
+      value: filamentTable.tableArn,
+      exportName: `${props.name}-FilamentTable-Arn`
+    })
   }
 }

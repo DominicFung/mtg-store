@@ -9,7 +9,7 @@ import ProductCard from './productCard';
 const products = [
   {
     name: 'Custom Deck Box',
-    description: 'Upload your art and create a unique deck box.',
+    description: 'Upload your art, stack filament colours, and preview the printed box.',
     link: '/box',
     images: [
       '/images/1F382F41-E88E-4192-815E-756C3A653F2D_1_105_c.jpeg', 

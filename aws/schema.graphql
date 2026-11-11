@@ -4,6 +4,22 @@ type Card {
   isRamp: Boolean!
 }
 
+# Shop spools for the deck-box filament preview.
+# hex and td shipped in seeds/filaments.json are approximate until measured.
+type Filament {
+  id: ID!
+  name: String!
+  hex: String!
+  td: Float!
+  inStock: Boolean!
+  brand: String
+  material: String
+  finish: String
+  sortOrder: Int
+  approximate: Boolean
+}
+
 type Query {
   searchCardByName(name: String!): [Card]
+  listFilaments: [Filament]
 }
