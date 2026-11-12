@@ -34,6 +34,51 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
   const dragRef = useRef<DragState | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const dragBoundary = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const [ghost, setGhost] = useState<{ name: string; hex: string; x: number; y: number } | null>(null);
+
+  const onTouchDragStart = (event: React.PointerEvent, filament: Filament) => {
+    if (event.pointerType === 'mouse') return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let dragging = false;
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      setGhost(null);
+      setOverIndex(null);
+    };
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (!dragging) {
+        if (Math.hypot(dx, dy) < 12) return;
+        if (Math.abs(dy) > Math.abs(dx) + 4) {
+          end();
+          return;
+        }
+        dragging = true;
+        suppressClick.current = true;
+      }
+      setGhost({ name: filament.name, hex: filament.hex, x: ev.clientX, y: ev.clientY });
+      const target = document.elementFromPoint(ev.clientX, ev.clientY);
+      const row = target?.closest('[data-layer-index]');
+      setOverIndex(row ? Number(row.getAttribute('data-layer-index')) : null);
+    };
+    const up = (ev: PointerEvent) => {
+      if (dragging) {
+        const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        const row = target?.closest('[data-layer-index]');
+        const index = row ? Number(row.getAttribute('data-layer-index')) : Number.NaN;
+        if (Number.isInteger(index)) assign(index, filament);
+      }
+      end();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
 
   const colors = layers.map((layer) => hexToRgb(layer.hex));
   const distances = layers.map((layer) => layer.td);
@@ -127,7 +172,7 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
       <div>
         <h3 className="text-lg font-semibold text-[#e2c275]">Filament layers</h3>
         <p className="mt-1 text-sm text-gray-300">
-          Drag a spool onto a layer, or select one and click the layer. Drag a layer onto another to reorder the stack. The bottom layer is the opaque backing and shows in the shadows.
+          Tap a colour, then tap a layer. You can also drag a spool onto a layer, and drag a layer onto another to reorder. On a phone, drag sideways from a colour onto a layer. The bottom layer is the opaque backing and shows in the shadows.
         </p>
         {approximate && (
           <p className="mt-2 text-xs text-amber-200/90">
@@ -152,7 +197,14 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
                 type="button"
                 draggable
                 title={`${filament.name}. Approximate TD ${filament.td} mm. ${filament.inStock ? 'In stock' : 'Out of stock'}`}
-                onClick={() => setSelectedId((current) => (current === filament.id ? null : filament.id))}
+                onClick={() => {
+                  if (suppressClick.current) {
+                    suppressClick.current = false;
+                    return;
+                  }
+                  setSelectedId((current) => (current === filament.id ? null : filament.id));
+                }}
+                onPointerDown={(event) => onTouchDragStart(event, filament)}
                 onDragStart={(event) => {
                   event.dataTransfer.setData('application/x-filament-id', filament.id);
                   event.dataTransfer.setData('text/plain', filament.name);
@@ -163,12 +215,12 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
                   dragRef.current = null;
                   setOverIndex(null);
                 }}
-                className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-left ${
+                className={`flex min-h-11 touch-manipulation items-center gap-2 rounded-md border px-2 py-1.5 text-left ${
                   active ? 'border-[#e2c275] bg-white/10' : 'border-white/10 bg-black/20 hover:border-white/30'
                 } ${filament.inStock ? '' : 'opacity-60'}`}
               >
                 <span
-                  className="h-7 w-7 shrink-0 rounded-sm border border-black/40"
+                  className="h-8 w-8 shrink-0 rounded-sm border border-black/40"
                   style={{ backgroundColor: filament.hex }}
                 />
                 <span className="min-w-0">
@@ -194,7 +246,7 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
             type="button"
             onClick={addLayer}
             disabled={layers.length >= MAX_LAYERS}
-            className="inline-flex items-center gap-1 rounded-md border border-[#e2c275]/50 px-2 py-1 text-xs text-[#e2c275] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-11 items-center gap-1 rounded-md border border-[#e2c275]/50 px-3 text-xs text-[#e2c275] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus className="h-3.5 w-3.5" />
             Add layer
@@ -202,7 +254,7 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
         </div>
         <div
           ref={barRef}
-          className="relative h-10 cursor-ew-resize touch-none"
+          className="relative h-12 cursor-ew-resize touch-none"
           onPointerDown={(event) => {
             const index = nearestBoundary(event.clientX);
             if (index === null) return;
@@ -240,7 +292,7 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
               style={{ left: `${boundary * 100}%` }}
             >
               <span className="mx-auto block h-full w-0.5 bg-white shadow" />
-              <span className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1a1a2e] bg-white shadow" />
+              <span className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1a1a2e] bg-white shadow" />
             </div>
           ))}
         </div>
@@ -271,6 +323,7 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
           return (
             <li
               key={`${layer.id}-${modelIndex}`}
+              data-layer-index={modelIndex}
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = dragRef.current?.kind === 'layer' ? 'move' : 'copy';
@@ -278,7 +331,7 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
               }}
               onDragLeave={() => setOverIndex((current) => (current === modelIndex ? null : current))}
               onDrop={(event) => onDropLayer(modelIndex, event)}
-              className={`flex items-center gap-2 rounded-md border px-2 py-2 ${
+              className={`flex flex-wrap items-center gap-1 rounded-md border px-2 py-2 sm:flex-nowrap ${
                 highlighted ? 'border-[#e2c275] bg-white/10' : 'border-white/10 bg-black/20'
               }`}
             >
@@ -327,32 +380,41 @@ export default function FilamentStack({ filaments, source, layers, boundaries, o
                 aria-label={`Move ${layer.name} toward highlights`}
                 disabled={modelIndex === layers.length - 1}
                 onClick={() => moveLayer(modelIndex, modelIndex + 1)}
-                className="text-gray-300 disabled:opacity-30"
+                className="grid h-11 w-11 place-items-center text-gray-300 disabled:opacity-30"
               >
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-5 w-5" />
               </button>
               <button
                 type="button"
                 aria-label={`Move ${layer.name} toward shadows`}
                 disabled={modelIndex === 0}
                 onClick={() => moveLayer(modelIndex, modelIndex - 1)}
-                className="text-gray-300 disabled:opacity-30"
+                className="grid h-11 w-11 place-items-center text-gray-300 disabled:opacity-30"
               >
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-5 w-5" />
               </button>
               <button
                 type="button"
                 aria-label={`Remove ${layer.name}`}
                 disabled={layers.length <= MIN_LAYERS}
                 onClick={() => removeLayer(modelIndex)}
-                className="text-gray-300 disabled:opacity-30"
+                className="grid h-11 w-11 place-items-center text-gray-300 disabled:opacity-30"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </li>
           );
         })}
       </ol>
+      {ghost && (
+        <div
+          className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-md border border-[#e2c275] bg-[#1a1a2e] px-2 py-1 text-xs shadow-lg"
+          style={{ left: ghost.x + 12, top: ghost.y + 12 }}
+        >
+          <span className="h-4 w-4 rounded-sm" style={{ backgroundColor: ghost.hex }} />
+          {ghost.name}
+        </div>
+      )}
     </div>
   );
 }

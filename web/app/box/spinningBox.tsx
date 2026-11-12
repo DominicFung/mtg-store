@@ -119,10 +119,12 @@ useGLTF.preload('/models/edh_box_v1.glb');
 
 export default function SpinningBoxWithTextures({ textures, glbPath }: Props) {
   return (
-    <div className="mx-auto aspect-square w-full max-w-[640px]">
+    <div className="relative mx-auto aspect-square w-full min-w-0 max-w-[640px]">
       <Canvas
+        className="!absolute inset-0 h-full w-full max-w-full touch-none"
         camera={{ position: [0, 40, 40], far: 10000 }}
         style={{ width: '100%', height: '100%' }}
+        dpr={[1, 1.5]}
         gl={{ preserveDrawingBuffer: true }}
       >
         <color attach="background" args={['#1f2937']} />
@@ -139,7 +141,7 @@ export default function SpinningBoxWithTextures({ textures, glbPath }: Props) {
         <Suspense fallback={null}>
           <TexturedBox textures={textures} glbPath={glbPath} />
         </Suspense>
-        <OrbitControls minDistance={100} maxDistance={1000} />
+        <OrbitControls enablePan={false} minDistance={100} maxDistance={1000} />
       </Canvas>
     </div>
   );

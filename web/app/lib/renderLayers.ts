@@ -1,5 +1,5 @@
 import { Filament } from './filamentCatalogue';
-import { colorForLuminance, equalBoundaries, hexToRgb, relativeLuminance, stretchLuminance } from './hueforge';
+import { colorForLuminance, equalBoundaries, hexToRgb, luminanceBounds, relativeLuminance, stretchLuminance } from './hueforge';
 
 type LumaBuffer = {
   width: number;
@@ -19,40 +19,6 @@ function remember(key: string, value: LumaBuffer) {
     if (oldest === undefined) break;
     cache.delete(oldest);
   }
-}
-
-function luminanceWindow(luma: Float32Array, alpha: Uint8ClampedArray): [number, number] {
-  const histogram = new Uint32Array(256);
-  let count = 0;
-  for (let index = 0; index < luma.length; index += 1) {
-    if (alpha[index] < 16) continue;
-    const bin = Math.max(0, Math.min(255, Math.round(luma[index] * 255)));
-    histogram[bin] += 1;
-    count += 1;
-  }
-  if (count === 0) return [0, 1];
-  const lowCut = count * 0.01;
-  const highCut = count * 0.99;
-  let seen = 0;
-  let low = 0;
-  for (let bin = 0; bin < 256; bin += 1) {
-    seen += histogram[bin];
-    if (seen >= lowCut) {
-      low = bin;
-      break;
-    }
-  }
-  seen = 0;
-  let high = 255;
-  for (let bin = 0; bin < 256; bin += 1) {
-    seen += histogram[bin];
-    if (seen >= highCut) {
-      high = bin;
-      break;
-    }
-  }
-  if (high - low < 8) return [0, 1];
-  return [low / 255, high / 255];
 }
 
 async function prepare(src: string, maxEdge: number): Promise<LumaBuffer | null> {
@@ -89,7 +55,7 @@ async function prepare(src: string, maxEdge: number): Promise<LumaBuffer | null>
     luma[pixel] = relativeLuminance(pixels.data[offset], pixels.data[offset + 1], pixels.data[offset + 2]);
   }
 
-  const [min, max] = luminanceWindow(luma, alpha);
+  const [min, max] = luminanceBounds(luma, alpha);
   for (let pixel = 0; pixel < luma.length; pixel += 1) {
     luma[pixel] = stretchLuminance(luma[pixel], min, max);
   }

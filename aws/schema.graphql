@@ -19,7 +19,31 @@ type Filament {
   approximate: Boolean
 }
 
+# Distances are millimetres. width and height are maximum bounds;
+# the deck-box preview fits the crop inside them.
+type PrintSettings {
+  id: ID!
+  layerHeight: Float!
+  baseLayerHeight: Float!
+  width: Float!
+  height: Float!
+  nozzleSize: Float!
+}
+
+input UpdatePrintSettingsInput {
+  layerHeight: Float!
+  baseLayerHeight: Float!
+  width: Float!
+  height: Float!
+  nozzleSize: Float!
+}
+
 type Query {
   searchCardByName(name: String!): [Card]
   listFilaments: [Filament]
+  getPrintSettings: PrintSettings
+}
+
+type Mutation {
+  updatePrintSettings(input: UpdatePrintSettingsInput!): PrintSettings
 }

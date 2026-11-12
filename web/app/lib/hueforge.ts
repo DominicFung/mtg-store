@@ -35,6 +35,41 @@ export function stretchLuminance(luminance: number, min: number, max: number): n
   return clamp01((luminance - min) / span);
 }
 
+/** 1st and 99th percentile of opaque pixels, as 0..1 luminance. */
+export function luminanceBounds(luma: ArrayLike<number>, alpha: ArrayLike<number>): [number, number] {
+  const histogram = new Uint32Array(256);
+  let count = 0;
+  for (let index = 0; index < luma.length; index += 1) {
+    if (alpha[index] < 16) continue;
+    const bin = Math.max(0, Math.min(255, Math.round(luma[index] * 255)));
+    histogram[bin] += 1;
+    count += 1;
+  }
+  if (count === 0) return [0, 1];
+  const lowCut = count * 0.01;
+  const highCut = count * 0.99;
+  let seen = 0;
+  let low = 0;
+  for (let bin = 0; bin < 256; bin += 1) {
+    seen += histogram[bin];
+    if (seen >= lowCut) {
+      low = bin;
+      break;
+    }
+  }
+  seen = 0;
+  let high = 255;
+  for (let bin = 0; bin < 256; bin += 1) {
+    seen += histogram[bin];
+    if (seen >= highCut) {
+      high = bin;
+      break;
+    }
+  }
+  if (high - low < 8) return [0, 1];
+  return [low / 255, high / 255];
+}
+
 export function equalBoundaries(layerCount: number): number[] {
   const boundaries: number[] = [];
   for (let index = 1; index < layerCount; index += 1) {
@@ -54,7 +89,7 @@ export function boundariesAfterRemove(boundaries: number[], index: number, layer
 }
 
 /** Band index for a luminance. The boundary value itself stays with the lower layer. */
-export function bandIndex(luminance: number, boundaries: number[]): number {
+export function bandIndex(luminance: number, boundaries: readonly number[]): number {
   const value = clamp01(luminance);
   for (let index = 0; index < boundaries.length; index += 1) {
     if (value <= boundaries[index]) return index;

@@ -148,5 +148,56 @@ export class AppsyncStack extends Stack {
       typeName: "Query",
       fieldName: "listFilaments"
     })
+
+    // New table only. The existing lambda role is left unchanged.
+    const printSettingsDynamoName = Fn.importValue(`${props.name}-PrintSettingsTable-Name`)
+    const printSettingsDynamoArn = Fn.importValue(`${props.name}-PrintSettingsTable-Arn`)
+
+    const printSettingsRole = new Role(this, `${props.name}-PrintSettingsLambdaRole`, {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+    })
+    printSettingsRole.addManagedPolicy(
+      ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+    )
+    printSettingsRole.addToPolicy(new PolicyStatement({
+      actions: ['dynamodb:GetItem', 'dynamodb:PutItem'],
+      resources: [printSettingsDynamoArn],
+    }))
+
+    const getPrintSettings = new NodejsFunction(this, `${props.name}-GetPrintSettings`, {
+      entry: join(__dirname, '../lambdas', 'appsync', 'printSettings', 'getPrintSettings.ts'),
+      timeout: Duration.seconds(30),
+      role: printSettingsRole,
+      bundling: { externalModules: ['aws-sdk'] },
+      depsLockFilePath: join(__dirname, '../lambdas', 'package-lock.json'),
+      environment: {
+        PRINT_SETTINGS_TABLE_NAME: printSettingsDynamoName,
+      },
+      runtime: Runtime.NODEJS_22_X,
+    })
+
+    appsync.addLambdaDataSource(`${props.name}GetPrintSettingsDS`, getPrintSettings)
+    .createResolver(`${props.name}-GetPrintSettingsResolver`, {
+      typeName: 'Query',
+      fieldName: 'getPrintSettings',
+    })
+
+    const updatePrintSettings = new NodejsFunction(this, `${props.name}-UpdatePrintSettings`, {
+      entry: join(__dirname, '../lambdas', 'appsync', 'printSettings', 'updatePrintSettings.ts'),
+      timeout: Duration.seconds(30),
+      role: printSettingsRole,
+      bundling: { externalModules: ['aws-sdk'] },
+      depsLockFilePath: join(__dirname, '../lambdas', 'package-lock.json'),
+      environment: {
+        PRINT_SETTINGS_TABLE_NAME: printSettingsDynamoName,
+      },
+      runtime: Runtime.NODEJS_22_X,
+    })
+
+    appsync.addLambdaDataSource(`${props.name}UpdatePrintSettingsDS`, updatePrintSettings)
+    .createResolver(`${props.name}-UpdatePrintSettingsResolver`, {
+      typeName: 'Mutation',
+      fieldName: 'updatePrintSettings',
+    })
   }
 }
