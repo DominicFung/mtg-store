@@ -115,7 +115,8 @@ export class AppsyncStack extends Stack {
 
     const nodeJsFunctionProps: NodejsFunctionProps = {
       role: excRole,
-      bundling: { externalModules: ['aws-sdk'] },
+      // Node.js 22 does not include aws-sdk v2. Bundle @aws-sdk/* into the asset.
+      bundling: { bundleAwsSDK: true },
       depsLockFilePath: join(__dirname, '../lambdas', 'package-lock.json'),
       environment: { 
         USER_TABLE_NAME: userDynamoName,
