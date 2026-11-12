@@ -82,5 +82,23 @@ export class DynamoStack extends Stack {
       value: filamentTable.tableArn,
       exportName: `${props.name}-FilamentTable-Arn`
     })
+
+    // HueForge print defaults for the deck box. One row, settingsId = "default".
+    // Retained on stack delete, same as the filament table.
+    const printSettingsTable = new Table(this, 'PrintSettingsTable', {
+      partitionKey: { name: 'settingsId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      tableName: `${props.name}-PrintSettingsTable`,
+    });
+
+    new CfnOutput(this, `${props.name}-PrintSettingsTable-Name`, {
+      value: printSettingsTable.tableName,
+      exportName: `${props.name}-PrintSettingsTable-Name`
+    })
+
+    new CfnOutput(this, `${props.name}-PrintSettingsTable-Arn`, {
+      value: printSettingsTable.tableArn,
+      exportName: `${props.name}-PrintSettingsTable-Arn`
+    })
   }
 }

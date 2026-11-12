@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test appsync/card/searchCardByName.test.mts",
-    "seed:filaments": "node scripts/seedFilaments.mjs"
+    "seed:filaments": "node scripts/seedFilaments.mjs",
+    "seed:print-settings": "node scripts/seedPrintSettings.mjs"
   },
   "author": "",
   "license": "ISC",
