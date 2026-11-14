@@ -12,23 +12,11 @@ const products = [
     description: 'Search your commander, crop the faces, and place an order. We print the box.',
     link: '/box',
     images: [
-      '/images/1F382F41-E88E-4192-815E-756C3A653F2D_1_105_c.jpeg', 
+      '/images/1F382F41-E88E-4192-815E-756C3A653F2D_1_105_c.jpeg',
       '/images/19C48FF5-CF48-4199-9D53-A6DB3112BDC8_1_105_c.jpeg',
       '/images/1801181C-5A70-41EF-BFDA-E37758F04E91_1_105_c.jpeg',
       '/images/B24D1D86-3792-46B5-A4F6-51A094D4A847_1_105_c.jpeg'
     ]
-  },
-  {
-    name: 'Mana Token Set',
-    description: 'Premium resin tokens for each mana color.',
-    link: '/tokens',
-    images: ['/images/mana-tokens-thumbnail.jpg']
-  },
-  {
-    name: 'Commander Life Counter',
-    description: 'Track your life total with style.',
-    link: '/life-counter',
-    images: ['/images/life-counter-thumbnail.jpg']
   },
 ];
 

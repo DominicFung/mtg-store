@@ -87,7 +87,13 @@ Nova Canvas and Titan Image Generator v2 are end of life and are not used. In th
 - `arn:aws:bedrock:us-east-2::foundation-model/stability.stable-outpaint-v1:0`
 - `arn:aws:bedrock:us-west-2::foundation-model/stability.stable-outpaint-v1:0`
 
-The profile routes across those three regions. Results are cached in the private order bucket. If the model is not enabled, or the call fails, the Lambda stores the edge extension instead so the crop step can continue.
+The profile routes across those three regions. The outpaint is one-sided: pixels are added on the left or the right, never both, and never up or down. The subject is measured on the original art. A figure on the left is extended to the right so the default crop keeps them on the front face; a figure on the right is extended to the left so they land on the back. A centred figure such as Brigid stays on the front. Pass `side: "left"` or `side: "right"` to force the other edge. Each direction is cached on its own at `outpaint/v2/<side>/<hash>.png`, and the other side is generated only when the shop asks for it.
+
+The shop route `/api/outpaint` calls this query, then returns the PNG as a data URL. The browser never paints the signed S3 URL, so the crop canvas is not tainted. The order bucket already allows `GET` from any origin; no S3 or CloudFront change is required for the crop. Objects are stored with `Cache-Control: private, no-store` so a non-CORS response is not reused.
+
+If the model is not enabled, or the call fails, the Lambda stores the one-sided edge extension instead so the crop step can continue.
+
+Deploy `mtgstore-AppsyncStack` before the Amplify web app. That stack publishes the `side` argument and the subject fields on `outpaintCommanderArt`, and replaces the outpaint Lambda. Until that deploy, the web route falls back to the same one-sided edge extension and does not call Bedrock.
 
 ## Payments
 

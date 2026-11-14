@@ -3,7 +3,15 @@ import type { Filament } from './filamentCatalogue';
 import type { NozzleProfile, ResolvedProfile } from './printGeometry';
 import { LAUNCH_PROFILES, profileToSettings, resolveProfile } from './printGeometry';
 import { newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
+import type { ExtendSide, SubjectBounds } from '../../../packages/print-core/src/outpaint';
 import { publicConfig } from './publicConfig';
+
+export type OutpaintArt = {
+  image: string;
+  source: string;
+  side: ExtendSide;
+  subject: SubjectBounds;
+};
 
 export type ShopStop = {
   filamentId: string;
@@ -138,26 +146,32 @@ function stopsFrom(layers: Filament[], endLayers: number[], profile: ResolvedPro
   }));
 }
 
-export async function outpaintArt(imageUrl: string): Promise<{ image: string; source: string }> {
-  if (!shopConfigured()) {
-    const response = await fetch('/api/outpaint', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ imageUrl }),
-    });
-    const body = await response.json() as { image?: string; source?: string; error?: string };
-    if (!response.ok || !body.image) throw new Error(body.error || 'Could not extend the artwork');
-    return { image: body.image, source: body.source ?? 'edge-extend' };
-  }
-  const data = await gql<{ outpaintCommanderArt: { imageUrl: string; source: string } }>(
-    `query Outpaint($imageUrl: String!) {
-      outpaintCommanderArt(imageUrl: $imageUrl) { imageUrl source }
-    }`,
-    { imageUrl },
-    'key',
-  );
-  if (!data.outpaintCommanderArt.imageUrl) throw new Error('Could not extend the artwork');
-  return { image: data.outpaintCommanderArt.imageUrl, source: data.outpaintCommanderArt.source };
+/**
+ * Always goes through the same-origin route, which returns a data URL.
+ * The browser never receives the Scryfall or S3 address, so the crop canvas
+ * cannot be tainted. `side` forces the other edge; omit it to let the
+ * subject pick. The other side is generated only when this is called again.
+ */
+export async function outpaintArt(imageUrl: string, side?: ExtendSide): Promise<OutpaintArt> {
+  const response = await fetch('/api/outpaint', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ imageUrl, side: side ?? null }),
+  });
+  const body = await response.json() as {
+    image?: string;
+    source?: string;
+    side?: string;
+    subject?: SubjectBounds;
+    error?: string;
+  };
+  if (!response.ok || !body.image || !body.subject) throw new Error(body.error || 'Could not extend the artwork');
+  return {
+    image: body.image,
+    source: body.source ?? 'edge-extend',
+    side: body.side === 'left' ? 'left' : 'right',
+    subject: body.subject,
+  };
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<ShopOrder> {
