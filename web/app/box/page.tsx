@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ImageCropper, { CropBox } from './imageCropper';
 import SpinningBoxWithTextures from './spinningBox';
@@ -8,6 +8,7 @@ import ColorCore from './colorCore';
 import CommanderSearch from './commanderSearch';
 import OrderPanel from './orderPanel';
 import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
+import type { ExtendSide, SubjectBounds } from '../../../packages/print-core/src/outpaint';
 import { useFilaments } from '../lib/filaments';
 import {
   defaultLayerSelection,
@@ -18,7 +19,7 @@ import { colorCoreLayerCount, evenStops } from '../lib/hueforge';
 import { modelSizeForCrop, profileToSettings, resolveProfile, type ResolvedProfile } from '../lib/printGeometry';
 import { LAUNCH_PROFILES } from '../lib/printGeometry';
 import { renderLayeredCrops } from '../lib/renderLayers';
-import { listActiveProfiles } from '../lib/shopOrders';
+import { listActiveProfiles, outpaintArt } from '../lib/shopOrders';
 import { usePrintSettings } from '../lib/usePrintSettings';
 
 const EMPTY_TEXTURES: [string, string, string] = ['', '', ''];
@@ -39,6 +40,13 @@ export default function Home() {
   const [previewReady, setPreviewReady] = useState(false);
   const [coloursTouched, setColoursTouched] = useState(false);
   const [commanderName, setCommanderName] = useState('');
+  const [artUrl, setArtUrl] = useState<string | null>(null);
+  const [extendSide, setExtendSide] = useState<ExtendSide>('right');
+  const [subject, setSubject] = useState<SubjectBounds | null>(null);
+  const [flipping, setFlipping] = useState(false);
+  const [flipError, setFlipError] = useState('');
+  const [cropError, setCropError] = useState('');
+  const [retryToken, setRetryToken] = useState(0);
   const [profiles, setProfiles] = useState<ResolvedProfile[]>(() => LAUNCH_PROFILES.map(resolveProfile));
   const [profileId, setProfileId] = useState(LAUNCH_PROFILES[0].id);
   const { filaments, source } = useFilaments();
@@ -46,7 +54,10 @@ export default function Home() {
   const layersRef = useRef(layers);
   layersRef.current = layers;
   const profile = profiles.find((entry) => entry.id === profileId) ?? profiles[0];
-  const settings = profile ? profileToSettings(profile) : fallbackSettings;
+  const settings = useMemo(
+    () => (profile ? profileToSettings(profile) : fallbackSettings),
+    [profile, fallbackSettings],
+  );
   const layerCount = profile?.layerCount ?? colorCoreLayerCount(settings);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -55,6 +66,10 @@ export default function Home() {
     const reader = new FileReader();
     reader.onload = () => {
       setImage(reader.result as string);
+      setArtUrl(null);
+      setSubject(null);
+      setCropError('');
+      setFlipError('');
       setImageToken((current) => current + 1);
       setCrops(['', '', '']);
       setCropPx([null, null, null]);
@@ -87,7 +102,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!crops[0] || layers.length === 0) {
-      setLayered(['', '', '']);
+      setLayered((current) => (current[0] ? ['', '', ''] as [string, string, string] : current));
       return;
     }
     let cancelled = false;
@@ -134,6 +149,62 @@ export default function Home() {
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
 
   const unlocked = crops[0] ? 3 : image ? 2 : 1;
+
+  const applyArtwork = (
+    src: string,
+    name: string,
+    detail: { artUrl: string; side: ExtendSide; subject: SubjectBounds },
+  ) => {
+    setImage(src);
+    setCommanderName(name);
+    setArtUrl(detail.artUrl);
+    setExtendSide(detail.side);
+    setSubject(detail.subject);
+    setImageToken((current) => current + 1);
+    setCrops(['', '', '']);
+    setCropPx([null, null, null]);
+    setCropBox(null);
+    setColoursTouched(false);
+    setCropError('');
+    setFlipError('');
+  };
+
+  const flipSide = async () => {
+    if (!artUrl || flipping) return;
+    const next: ExtendSide = extendSide === 'left' ? 'right' : 'left';
+    setFlipping(true);
+    setFlipError('');
+    setCropError('');
+    try {
+      const extended = await outpaintArt(artUrl, next);
+      applyArtwork(extended.image, commanderName, {
+        artUrl,
+        side: extended.side,
+        subject: extended.subject,
+      });
+    } catch (error) {
+      setFlipError(error instanceof Error ? error.message : 'Could not extend the other side');
+    } finally {
+      setFlipping(false);
+    }
+  };
+
+  const flipControl = artUrl ? (
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        onClick={() => { void flipSide(); }}
+        disabled={flipping}
+        className="min-h-9 rounded-full border border-[#e2c275]/70 px-3 text-xs font-semibold text-[#e2c275] disabled:opacity-50"
+      >
+        {flipping ? 'Extending the other side…' : 'Flip side'}
+      </button>
+      <span className="text-xs text-gray-400">
+        {extendSide === 'left' ? 'Extended on the left, subject on the back.' : 'Extended on the right, subject on the front.'}
+      </span>
+      {flipError && <span className="text-xs text-red-300">{flipError}</span>}
+    </div>
+  ) : null;
 
   useEffect(() => {
     if (!crops[0] || coloursTouched || filaments.length === 0) return;
@@ -231,15 +302,16 @@ export default function Home() {
         </p>
 
         <div className={step === 1 ? 'block' : 'hidden'}>
-          <CommanderSearch onArtwork={(src, name) => {
-            setImage(src);
-            setCommanderName(name);
-            setImageToken((current) => current + 1);
-            setCrops(['', '', '']);
-            setCropPx([null, null, null]);
-            setCropBox(null);
-            setColoursTouched(false);
+          <CommanderSearch onArtwork={(artwork) => {
+            applyArtwork(artwork.src, artwork.name, artwork);
           }} />
+          {image && (
+            <figure className="mt-4">
+              <img src={image} alt={commanderName ? `${commanderName} extended for the box` : 'Selected artwork'} className="mx-auto max-h-72 w-full rounded-lg object-contain" />
+              {commanderName && <figcaption className="mt-1 text-center text-xs text-gray-400">{commanderName}, extended on one side</figcaption>}
+              {flipControl}
+            </figure>
+          )}
           <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wide text-gray-500">
             <span className="h-px flex-1 bg-white/10" />
             or upload your own art
@@ -255,12 +327,6 @@ export default function Home() {
             <p className="text-base font-semibold">{isDragActive ? 'Drop the image here' : 'Drag an image here, or tap to choose one'}</p>
             <p className="mt-1 text-xs text-gray-400">JPG, PNG, or WebP</p>
           </div>
-          {image && (
-            <figure className="mt-4">
-              <img src={image} alt={commanderName ? `${commanderName} extended for the box` : 'Selected artwork'} className="mx-auto max-h-72 w-full rounded-lg object-contain" />
-              {commanderName && <figcaption className="mt-1 text-center text-xs text-gray-400">{commanderName}, extended to the three faces</figcaption>}
-            </figure>
-          )}
         </div>
 
         {step === 2 && (
@@ -271,16 +337,39 @@ export default function Home() {
             </p>
             {image ? (
               <ImageCropper
-                key={imageToken}
+                key={`${imageToken}-${retryToken}`}
                 imageSrc={image}
                 initialBox={cropBox}
                 onBoxChange={setCropBox}
-                setCrops={setCrops}
+                subject={subject}
+                onError={setCropError}
+                setCrops={(next) => {
+                  setCropError('');
+                  setCrops(next);
+                }}
               />
             ) : (
               <p className="mt-4 text-sm text-gray-400">Choose an image in step 1 first.</p>
             )}
-            {image && !crops[0] && <p className="mt-3 text-xs text-gray-400">Preparing the crop…</p>}
+            {flipControl}
+            {cropError ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <p className="text-sm text-red-300">{cropError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropError('');
+                    setCrops(['', '', '']);
+                    setRetryToken((current) => current + 1);
+                  }}
+                  className="min-h-9 rounded-full border border-white/20 px-3 text-xs"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : image && !crops[0] && (
+              <p className="mt-3 text-xs text-gray-400">Preparing the crop…</p>
+            )}
           </div>
         )}
 

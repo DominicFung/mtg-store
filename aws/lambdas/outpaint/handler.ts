@@ -1,11 +1,20 @@
 import { createHash } from 'node:crypto';
 import type { AppSyncResolverEvent } from 'aws-lambda';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { HeadObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { decode as decodeJpeg } from 'jpeg-js';
 import { PNG } from 'pngjs';
-import { extendToAspect, outpaintMargins, WRAP_ASPECT } from '../../../packages/print-core/src/outpaint';
+import {
+  extendSideForSubject,
+  extendToAspect,
+  outpaintMargins,
+  placeSubject,
+  subjectBounds,
+  WRAP_ASPECT,
+  type ExtendSide,
+  type SubjectBounds,
+} from '../../../packages/print-core/src/outpaint';
 import { requiredEnv, s3 } from '../orders/store';
 
 const ALLOWED = [/^https:\/\/cards\.scryfall\.io\//, /^https:\/\/api\.scryfall\.com\//];
@@ -13,12 +22,18 @@ const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us
 
 const DEFAULT_MODEL = 'us.stability.stable-outpaint-v1:0';
 
+type OutpaintArgs = { imageUrl: string; side?: string | null };
+
 /**
- * Extends commander art to the three-face frame with Stability Image Outpaint.
- * BEDROCK_IMAGE_MODEL overrides the model id (default us.stability.stable-outpaint-v1:0).
- * If Bedrock rejects the call, the edge extension is cached so the crop can continue.
+ * Extends commander art on one side so the subject can sit on the front or the
+ * back, never centred on the spine. BEDROCK_IMAGE_MODEL overrides the model id
+ * (default us.stability.stable-outpaint-v1:0). `side` is "left" or "right";
+ * omit it and the empty side is chosen from the subject. Each side is cached
+ * on its own under outpaint/v2 so a flip does not reuse the other direction
+ * and does not pay for a second generation until it is requested.
+ * If Bedrock rejects the call, the one-sided edge extension is cached instead.
  */
-export const handler = async (event: AppSyncResolverEvent<{ imageUrl: string }>) => {
+export const handler = async (event: AppSyncResolverEvent<OutpaintArgs>) => {
   const imageUrl = event.arguments?.imageUrl ?? '';
   if (!ALLOWED.some((pattern) => pattern.test(imageUrl))) throw new Error('Artwork must come from Scryfall');
   const upstream = await fetch(imageUrl, {
@@ -27,40 +42,107 @@ export const handler = async (event: AppSyncResolverEvent<{ imageUrl: string }>)
   if (!upstream.ok) throw new Error(`Could not fetch the card art (${upstream.status})`);
   const original = Buffer.from(await upstream.arrayBuffer());
   const decoded = decodeImage(original);
-  const target = extendToAspect(decoded, WRAP_ASPECT);
-  const hash = createHash('sha256').update(original).update(String(target.width)).update(String(target.height)).digest('hex');
-  const key = `outpaint/${hash}.png`;
+  const bounds = subjectBounds(decoded);
+  const side = requestedSide(event.arguments?.side) ?? extendSideForSubject(bounds.center);
+  const margins = outpaintMargins(decoded.width, decoded.height, bounds, side);
+  const target = extendToAspect(decoded, WRAP_ASPECT, side);
+  const hash = createHash('sha256')
+    .update(original)
+    .update(side)
+    .update(String(margins.left))
+    .update(String(margins.right))
+    .digest('hex');
+  const key = `outpaint/v2/${side}/${hash}.png`;
   const cached = await readCache(key);
-  if (cached) return { imageUrl: cached, source: 'cache', width: target.width, height: target.height };
+  if (cached) return result(cached.url, 'cache', cached.width, cached.height, side, cached.subject);
 
   let png = encodePng(target.rgba, target.width, target.height);
   let source = 'edge-extend';
+  let width = target.width;
+  let height = target.height;
   const modelId = process.env.BEDROCK_IMAGE_MODEL || DEFAULT_MODEL;
-  const margins = outpaintMargins(decoded.width, decoded.height);
-  if (margins.left + margins.right + margins.up + margins.down > 0) {
+  if (margins.left + margins.right > 0) {
     try {
       png = await outpaintWithBedrock(modelId, decoded, margins);
+      const produced = decodeImage(png);
+      width = produced.width;
+      height = produced.height;
       source = modelId;
     } catch (error) {
-      console.error('Bedrock outpaint unavailable; using the edge extension', error);
+      console.error('Bedrock outpaint unavailable; using the one-sided edge extension', error);
     }
   }
+  const subject = placeSubject(bounds, decoded.width, width, side);
   await s3.send(new PutObjectCommand({
     Bucket: requiredEnv('ORDER_BUCKET_NAME'),
     Key: key,
     Body: png,
     ContentType: 'image/png',
+    CacheControl: 'private, no-store',
+    Metadata: {
+      width: String(width),
+      height: String(height),
+      side,
+      subjectleft: String(subject.left),
+      subjectright: String(subject.right),
+      subjectcenter: String(subject.center),
+    },
   }));
-  return { imageUrl: await readCache(key), source, width: target.width, height: target.height };
+  const stored = await readCache(key);
+  return result(stored?.url ?? '', source, width, height, side, subject);
 };
 
-async function readCache(key: string): Promise<string | null> {
+function result(
+  imageUrl: string | null,
+  source: string,
+  width: number,
+  height: number,
+  side: ExtendSide,
+  subject: SubjectBounds,
+) {
+  return {
+    imageUrl,
+    source,
+    width,
+    height,
+    side,
+    subjectLeft: subject.left,
+    subjectRight: subject.right,
+    subjectCenter: subject.center,
+  };
+}
+
+function requestedSide(value: string | null | undefined): ExtendSide | null {
+  return value === 'left' || value === 'right' ? value : null;
+}
+
+async function readCache(key: string): Promise<{
+  url: string;
+  width: number;
+  height: number;
+  subject: SubjectBounds;
+} | null> {
+  const bucket = requiredEnv('ORDER_BUCKET_NAME');
+  let meta: Record<string, string> | undefined;
   try {
-    await s3.send(new GetObjectCommand({ Bucket: requiredEnv('ORDER_BUCKET_NAME'), Key: key }));
+    const head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    meta = head.Metadata;
   } catch {
     return null;
   }
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: requiredEnv('ORDER_BUCKET_NAME'), Key: key }), { expiresIn: 60 * 60 });
+  const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 60 * 60 });
+  const subject = {
+    left: Number(meta?.subjectleft),
+    right: Number(meta?.subjectright),
+    center: Number(meta?.subjectcenter),
+  };
+  if (![subject.left, subject.right, subject.center].every(Number.isFinite)) return null;
+  return {
+    url,
+    width: Number(meta?.width) || 0,
+    height: Number(meta?.height) || 0,
+    subject,
+  };
 }
 
 async function outpaintWithBedrock(
@@ -73,8 +155,8 @@ async function outpaintWithBedrock(
     prompt: 'Extend the existing background seamlessly. Keep the same lighting and style. Do not add characters, text, or a frame.',
     left: margins.left,
     right: margins.right,
-    up: margins.up,
-    down: margins.down,
+    up: 0,
+    down: 0,
     creativity: 0.35,
     output_format: 'png',
   });

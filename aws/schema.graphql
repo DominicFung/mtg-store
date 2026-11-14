@@ -229,6 +229,13 @@ type OutpaintResult {
   source: String!
   width: Int!
   height: Int!
+  # "left" or "right": the side that was extended. The subject stays on the other side.
+  side: String!
+  # Subject span as fractions of the extended image, so the crop can place them
+  # on an outer face without reading a cross-origin bitmap.
+  subjectLeft: Float!
+  subjectRight: Float!
+  subjectCenter: Float!
 }
 
 type Query {
@@ -241,7 +248,9 @@ type Query {
   listOrders(status: String, email: String, limit: Int): [OrderSummary!]! @aws_cognito_user_pools(cognito_groups: ["admin"])
   getAdminOrder(orderId: ID!): OrderDetail! @aws_cognito_user_pools(cognito_groups: ["admin"])
   trackOrder(orderNumber: String!, email: String!): OrderDetail!
-  outpaintCommanderArt(imageUrl: String!): OutpaintResult!
+  # side is "left" or "right" to extend that edge. Omit it and the Lambda picks
+  # the empty side, away from the subject. Each side is cached on its own.
+  outpaintCommanderArt(imageUrl: String!, side: String): OutpaintResult!
 }
 
 type Mutation {

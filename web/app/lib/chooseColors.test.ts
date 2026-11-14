@@ -65,7 +65,8 @@ test('edge extend widens a portrait crop to the three-face frame and does not in
   const margins = outpaintMargins(40, 50);
   assert.equal(margins.up, 0);
   assert.equal(margins.down, 0);
-  assert.ok(margins.left > 0 && margins.right > 0);
-  assert.ok(margins.left <= 2000 && margins.right <= 2000);
+  assert.equal(margins.left, 0);
+  assert.ok(margins.right > 0 && margins.right <= 2000);
+  assert.equal(outpaintMargins(40, 50, { left: 0.7, right: 0.9, center: 0.8 }, 'left').right, 0);
   assert.equal(outpaintMargins(841, 326).left, 0);
 });
