@@ -1,300 +1,366 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import JSZip from 'jszip';
 import {
-  buildHueforgeMeshes,
+  buildFaceMesh,
+  buildVertexHeights,
   decodeBinaryStl,
   DEFAULT_PRINT_SETTINGS,
-  encodeAsciiStl,
-  encodeBinaryStl,
-  frameInsetMm,
-  gridCells,
-  layerStartZMm,
-  layerTopZMm,
-  layersForTransmission,
-  planLayerSwaps,
-  resolvePrintSize,
+  encodeHeightfieldStl,
+  meshGrid,
+  meshTriangleCount,
+  modelSizeForCrop,
   triangleBounds,
-  type PrintSettings,
   type Triangle,
 } from './printGeometry';
+import {
+  colorAtLayer,
+  colorCoreLayerCount,
+  evenStops,
+  formatDetails,
+  hexToRgb,
+  insertStop,
+  layerForDepth,
+  layerForLuminance,
+  layerTopMm,
+  moveStop,
+  removeStop,
+  shortFilamentName,
+  transmission,
+  TRANSMISSION_DENSITY,
+  type CoreStop,
+  type LayerSettings,
+} from './hueforge';
 
-const settings: PrintSettings = { ...DEFAULT_PRINT_SETTINGS };
+const settings: LayerSettings = {
+  layerHeight: 0.04,
+  baseLayerHeight: 0.09,
+  minDepth: 0.25,
+  maxDepth: 2.01,
+};
+
+const printSettings = { ...DEFAULT_PRINT_SETTINGS };
+
+function stop(type: string, brand: string, name: string, td: number, endLayer: number, hex: string): CoreStop {
+  return { filament: { type, brand, name, td }, rgb: hexToRgb(hex), endLayer };
+}
+
+const fireStops: CoreStop[] = [
+  stop('PLA', 'BambuLab Basic', 'Blue', 4, 7, '#1F4EAE'),
+  stop('PLA', 'Jessie Premium', 'Red Ice', 8.6, 17, '#E24B6A'),
+  stop('PLA', 'Hatchbox', 'Pink', 12, 23, '#F48FB1'),
+  stop('PLA', 'BambuLab Basic', 'Orange', 7, 32, '#F58220'),
+  stop('PLA', 'BambuLab Matte', 'Lemon Yellow', 4, 41, '#F5E642'),
+  stop('PLA', 'BambuLab Basic', 'Jade White', 5, 50, '#F3F0E6'),
+];
+
+const brigidStops: CoreStop[] = [
+  stop('PLA', 'BambuLab Basic', 'Black', 0.6, 4, '#10100E'),
+  stop('PLA', 'Jessie Premium', 'Green Ice', 11, 7, '#04AF76'),
+  stop('PLA', 'Kexcelled', 'Bluish Green', 3, 10, '#365927'),
+  stop('PLA', 'BambuLab Matte', 'Dark Brown', 2, 13, '#7D6556'),
+  stop('PLA', 'Jessie Premium', 'Red Ice', 8.6, 15, '#862E26'),
+  stop('PLA', 'Hatchbox', 'Pink', 12, 21, '#FF81BA'),
+  stop('PETG', 'GEETECH', 'Gray', 3, 26, '#BCBCBC'),
+  stop('PLA', 'BambuLab Matte', 'Ice Blue', 3.5, 35, '#8BD5EE'),
+  stop('PETG', 'JAYO', 'White', 6, 50, '#FFFFFF'),
+];
+
+const FIRE_DETAILS = `Project: fire-case-3-right.hfp
+Print at 100% infill with a layer height of 0.04mm with a base layer of 0.09mm
+
+ The Model is 94.67x105.45mm in size
+ You may print at higher layer heights below the Min Depth of 0.25mm
+ The Max Depth is 2mm and the Actual Depth is 2mm
+
+Filaments Used:
+	PLA BambuLab Basic Blue Transmission Distance: 4
+	PLA Jessie Premium Red Ice Transmission Distance: 8.6
+	PLA Hatchbox Pink Transmission Distance: 12
+	PLA BambuLab Basic Orange Transmission Distance: 7
+	PLA BambuLab Matte Lemon Yellow Transmission Distance: 4
+	PLA BambuLab Basic Jade White Transmission Distance: 5
+This print uses 6 unique filaments
+
+Swap Instructions:
+	Start with Blue
+	At layer #7 (0.33mm) swap to Red Ice
+	At layer #17 (0.73mm) swap to Pink
+	At layer #23 (0.97mm) swap to Orange
+	At layer #32 (1.33mm) swap to Lemon Yellow
+	At layer #41 (1.69mm) swap to Jade White for the rest.
+`;
+
+const BRIGID_DETAILS = `Project: brigid-case-2-back.hfp
+Print at 100% infill with a layer height of 0.04mm with a base layer of 0.09mm
+
+ The Model is 82.44x105.45mm in size
+ You may print at higher layer heights below the Min Depth of 0.25mm
+ The Max Depth is 2mm and the Actual Depth is 2mm
+
+Filaments Used:
+	PLA BambuLab Basic Black Transmission Distance: 0.6
+	PLA Jessie Premium Green Ice Transmission Distance: 11
+	PLA Kexcelled Bluish Green Transmission Distance: 3
+	PLA BambuLab Matte Dark Brown Transmission Distance: 2
+	PLA Jessie Premium Red Ice Transmission Distance: 8.6
+	PLA Hatchbox Pink Transmission Distance: 12
+	PETG GEETECH Gray Transmission Distance: 3
+	PLA BambuLab Matte Ice Blue Transmission Distance: 3.5
+	PETG JAYO White Transmission Distance: 6
+This print uses 9 unique filaments
+
+!!!!  It appears you have mixed filament types.  Be certain this is what you want.  !!!!!
+
+Swap Instructions:
+	Start with Black
+	At layer #4 (0.21mm) swap to Green Ice
+	At layer #7 (0.33mm) swap to Bluish Green
+	At layer #10 (0.45mm) swap to Dark Brown
+	At layer #13 (0.57mm) swap to Red Ice
+	At layer #15 (0.65mm) swap to Pink
+	At layer #21 (0.89mm) swap to Gray
+	At layer #26 (1.09mm) swap to Ice Blue
+	At layer #35 (1.45mm) swap to White for the rest.
+`;
 
 function nearly(actual: number, expected: number, epsilon = 1e-3) {
-  assert.ok(
-    Math.abs(actual - expected) <= epsilon,
-    `expected ${expected}, got ${actual}`,
-  );
+  assert.ok(Math.abs(actual - expected) <= epsilon, `expected ${expected}, got ${actual}`);
 }
 
-function pointsOutward(triangles: Triangle[]) {
+test('the colour core is 50 layers and layer tops match the slider depths', () => {
+  assert.equal(colorCoreLayerCount(settings), 50);
+  assert.equal(layerTopMm(1, settings), 0.09);
+  assert.equal(layerTopMm(4, settings), 0.21);
+  assert.equal(layerTopMm(7, settings), 0.33);
+  assert.equal(layerTopMm(10, settings), 0.45);
+  assert.equal(layerTopMm(13, settings), 0.57);
+  assert.equal(layerTopMm(15, settings), 0.65);
+  assert.equal(layerTopMm(17, settings), 0.73);
+  assert.equal(layerTopMm(21, settings), 0.89);
+  assert.equal(layerTopMm(23, settings), 0.97);
+  assert.equal(layerTopMm(26, settings), 1.09);
+  assert.equal(layerTopMm(32, settings), 1.33);
+  assert.equal(layerTopMm(35, settings), 1.45);
+  assert.equal(layerTopMm(41, settings), 1.69);
+  assert.equal(layerTopMm(50, settings), 2.05);
+  assert.equal(layerForDepth(0.25, settings), 5);
+  assert.equal(layerForDepth(2.01, settings), 49);
+  assert.equal(layerTopMm(49, settings), 2.01);
+});
+
+test('crop aspect at the shared face height reproduces both ground-truth plates', () => {
+  const right = modelSizeForCrop(650, 724, 105.45);
+  assert.equal(right.widthMm, 94.67);
+  assert.equal(right.heightMm, 105.45);
+  const back = modelSizeForCrop(480, 614, 105.45);
+  assert.equal(back.widthMm, 82.44);
+  assert.equal(back.heightMm, 105.45);
+});
+
+test('fire-case details.txt matches HueForge byte for byte', () => {
+  const text = formatDetails({
+    projectName: 'fire-case-3-right.hfp',
+    widthMm: 94.67,
+    heightMm: 105.45,
+    settings,
+    stops: fireStops,
+  });
+  assert.equal(text, FIRE_DETAILS);
+});
+
+test('brigid-case details.txt matches HueForge byte for byte, including the mixed-type warning', () => {
+  const text = formatDetails({
+    projectName: 'brigid-case-2-back.hfp',
+    widthMm: 82.44,
+    heightMm: 105.45,
+    settings,
+    stops: brigidStops,
+  });
+  assert.equal(text, BRIGID_DETAILS);
+});
+
+test('the project name is the only token that changes between the two plates', () => {
+  const renamed = formatDetails({
+    projectName: 'custom-name.hfp',
+    widthMm: 94.67,
+    heightMm: 105.45,
+    settings,
+    stops: fireStops,
+  });
+  assert.equal(renamed, FIRE_DETAILS.replace('fire-case-3-right.hfp', 'custom-name.hfp'));
+});
+
+test('catalogue product names shorten to the colour, and a missing type is PLA', () => {
+  assert.equal(shortFilamentName({ name: 'Elegoo PLA Red', brand: 'Elegoo', td: 1 }), 'Red');
+  assert.equal(shortFilamentName({ name: 'Ice Blue', brand: 'BambuLab Matte', td: 3.5 }), 'Ice Blue');
+  const text = formatDetails({
+    projectName: 'one.hfp',
+    widthMm: 10,
+    heightMm: 10,
+    settings,
+    stops: [{ filament: { name: 'Elegoo PLA Red', brand: 'Elegoo', td: 3.4 }, rgb: [1, 2, 3], endLayer: 50 }],
+  });
+  assert.match(text, /PLA Elegoo Red Transmission Distance: 3\.4/);
+  assert.match(text, /Start with Red/);
+  assert.doesNotMatch(text, /mixed filament types/);
+});
+
+test('density 10 reaches the Brigid ice-blue slider; density 1 does not', () => {
+  const atSlider = colorAtLayer(35, brigidStops, settings);
+  assert.ok(Math.abs(atSlider[0] - 139) < 20, `red ${atSlider[0]}`);
+  assert.ok(Math.abs(atSlider[1] - 213) < 20, `green ${atSlider[1]}`);
+  assert.ok(Math.abs(atSlider[2] - 238) < 20, `blue ${atSlider[2]}`);
+  const white = colorAtLayer(50, brigidStops, settings);
+  assert.ok(white[0] > 240 && white[1] > 240 && white[2] > 240, `top ${white}`);
+  const weak = transmission(0.36, 3.5, 1);
+  const fitted = transmission(0.36, 3.5, TRANSMISSION_DENSITY);
+  assert.ok(weak > 0.7, `unstiffened ice blue still transmits ${weak}`);
+  assert.ok(fitted < 0.1, `fitted ice blue still transmits ${fitted}`);
+});
+
+test('a bright pixel is a taller layer than a dark pixel, and both sit on a layer top', () => {
+  const dark = layerForLuminance(0, 5, 50, 1);
+  const bright = layerForLuminance(1, 5, 50, 1);
+  assert.equal(dark, 5);
+  assert.equal(bright, 50);
+  assert.ok(layerTopMm(bright, settings) > layerTopMm(dark, settings));
+  const mid = layerTopMm(layerForLuminance(0.5, 5, 50), settings);
+  const tops = Array.from({ length: 50 }, (_, index) => layerTopMm(index + 1, settings));
+  assert.ok(tops.some((top) => Math.abs(top - mid) < 1e-9));
+});
+
+test('stops can be inserted, dragged, and removed without leaving the core', () => {
+  const start = evenStops(3, 50);
+  assert.deepEqual(start, [17, 33, 50]);
+  const added = insertStop(start);
+  assert.equal(added.index >= 0, true);
+  assert.equal(added.stops[added.stops.length - 1], 50);
+  const moved = moveStop(added.stops, 0, 2, 50);
+  assert.equal(moved[0], 2);
+  const removed = removeStop(moved, 0);
+  assert.equal(removed[removed.length - 1], 50);
+  assert.equal(removed.length, moved.length - 1);
+});
+
+test('the STL is one watertight solid the size of the plate, with the border as the tallest part', () => {
+  const width = 4;
+  const height = 4;
+  const luma = new Float32Array([1, 1, 0, 0]);
+  const heights = buildVertexHeights({
+    widthMm: 20,
+    heightMm: 24,
+    cols: width,
+    rows: height,
+    borderWidthMm: 4,
+    borderDepthMm: 3,
+    luma,
+    lumaCols: 2,
+    lumaRows: 2,
+    settings,
+    maxLayer: 50,
+  });
+  assert.equal(heights[0], 3);
+  assert.equal(heights[heights.length - 1], 3);
+  const inner = heights[2 * (width + 1) + 2];
+  assert.ok(inner >= 0.25 - 1e-6 && inner <= 2.05 + 1e-6, `inner height ${inner}`);
+  assert.ok(inner < 3);
+
+  const stl = encodeHeightfieldStl({ cols: width, rows: height, widthMm: 20, heightMm: 24, heights });
+  assert.equal(stl.byteLength, 84 + meshTriangleCount(width, height) * 50);
+  const triangles = decodeBinaryStl(stl);
   const bounds = triangleBounds(triangles);
-  const center = [
-    (bounds.min[0] + bounds.max[0]) / 2,
-    (bounds.min[1] + bounds.max[1]) / 2,
-    (bounds.min[2] + bounds.max[2]) / 2,
-  ];
-  for (const triangle of triangles) {
-    const vertex = triangle.verts[0];
-    const outward = triangle.normal[0] * (vertex[0] - center[0])
-      + triangle.normal[1] * (vertex[1] - center[1])
-      + triangle.normal[2] * (vertex[2] - center[2]);
-    assert.ok(outward > 1e-6, `normal ${triangle.normal} at ${vertex} points inward`);
+  nearly(bounds.min[0], 0);
+  nearly(bounds.min[1], 0);
+  nearly(bounds.min[2], 0);
+  nearly(bounds.max[0], 20);
+  nearly(bounds.max[1], 24);
+  nearly(bounds.max[2], 3, 1e-4);
+
+  assert.equal(pairedEdges(triangles), true);
+  assert.ok(signedVolume(triangles) > 0, 'winding should face outward');
+
+  const highY = triangles.flatMap((triangle) => triangle.verts)
+    .filter((vertex) => vertex[1] > 16 && vertex[0] > 6 && vertex[0] < 14 && vertex[2] < 2.9 && vertex[2] > 0.05);
+  const lowY = triangles.flatMap((triangle) => triangle.verts)
+    .filter((vertex) => vertex[1] < 8 && vertex[0] > 6 && vertex[0] < 14 && vertex[2] < 2.9 && vertex[2] > 0.05);
+  const highZ = Math.max(...highY.map((vertex) => vertex[2]));
+  const lowZ = Math.max(...lowY.map((vertex) => vertex[2]));
+  assert.ok(highZ > lowZ, `image top should be taller (${highZ} vs ${lowZ})`);
+});
+
+test('detail size is honoured until the triangle cap pulls the grid apart', () => {
+  const fine = meshGrid(94.67, 105.45, 0.1, 50_000_000);
+  assert.ok(Math.abs(fine.stepMm - 0.1) < 0.02, `step ${fine.stepMm}`);
+  const capped = meshGrid(94.67, 105.45, 0.1, 180_000);
+  assert.ok(capped.triangles <= 180_000);
+  assert.ok(capped.stepMm > 0.1);
+});
+
+test('a real-sized face mesh stays inside the plate and reaches the border depth', () => {
+  const width = 32;
+  const height = 36;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      const bright = y < height / 2 ? 220 : 20;
+      rgba[offset] = bright;
+      rgba[offset + 1] = bright;
+      rgba[offset + 2] = bright;
+      rgba[offset + 3] = 255;
+    }
   }
+  const mesh = buildFaceMesh({
+    rgba,
+    imageWidth: width,
+    imageHeight: height,
+    settings: printSettings,
+    stops: brigidStops,
+    smoothing: 0,
+    maxTriangles: 8_000,
+    header: 'test',
+  });
+  const expected = modelSizeForCrop(width, height, printSettings.height);
+  assert.equal(mesh.widthMm, expected.widthMm);
+  assert.equal(mesh.heightMm, expected.heightMm);
+  const decoded = decodeBinaryStl(mesh.stl);
+  const bounds = triangleBounds(decoded);
+  nearly(bounds.max[0], expected.widthMm, 0.02);
+  nearly(bounds.max[1], expected.heightMm, 0.02);
+  nearly(bounds.min[2], 0, 1e-4);
+  nearly(bounds.max[2], printSettings.borderDepth, 0.02);
+  assert.equal(decoded.length, mesh.triangles);
+  assert.ok(mesh.triangles <= 8_000);
+});
+
+function signedVolume(triangles: Triangle[]): number {
+  let volume = 0;
+  for (const triangle of triangles) {
+    const [a, b, c] = triangle.verts;
+    volume += a[0] * (b[1] * c[2] - b[2] * c[1])
+      - a[1] * (b[0] * c[2] - b[2] * c[0])
+      + a[2] * (b[0] * c[1] - b[1] * c[0]);
+  }
+  return volume / 6;
 }
 
-test('transmission distance rounds in microns', () => {
-  assert.equal(layersForTransmission(1.7, 0.04), 43);
-  assert.equal(layersForTransmission(0.5, 0.04), 13);
-  assert.equal(layersForTransmission(0.08, 0.04), 2);
-  assert.equal(layersForTransmission(0.02, 0.04), 1);
-  assert.equal(layersForTransmission(0, 0.04), 1);
-});
-
-test('layer 1 uses the base height and later layers use layer height', () => {
-  const stack = planLayerSwaps([
-    { name: 'Elegoo PLA Black', hex: '#161616', td: 9 },
-    { name: 'GiantArm Silk Silver', hex: '#d5dce3', td: 1.7 },
-    { name: 'Elegoo PLA Red', hex: 'd4252b', td: 0.08 },
-  ], settings);
-
-  assert.equal(stack[0].layerNumber, 1);
-  assert.equal(stack[0].layerCount, 1);
-  assert.equal(stack[0].zMm, 0);
-  assert.equal(stack[0].zEndMm, 0.09);
-  assert.equal(stack[0].hex, '#161616');
-
-  assert.equal(stack[1].layerCount, 43);
-  assert.equal(stack[1].layerNumber, 2);
-  assert.equal(stack[1].zMm, 0.09);
-  assert.equal(stack[1].zMm, layerStartZMm(2, settings));
-  assert.equal(stack[1].zEndMm, 0.09 + 43 * 0.04);
-  assert.equal(stack[1].zEndMm, layerTopZMm(44, settings));
-
-  assert.equal(stack[2].layerNumber, 45);
-  assert.equal(stack[2].layerCount, 2);
-  assert.equal(stack[2].zMm, layerStartZMm(45, settings));
-  assert.equal(stack[2].zMm, stack[1].zEndMm);
-  assert.equal(stack[2].zEndMm, 1.89);
-  assert.equal(stack[2].hex, '#D4252B');
-});
-
-test('rejects a non-positive layer height', () => {
-  assert.throws(() => planLayerSwaps(
-    [{ name: 'Black', hex: '#000000', td: 1 }],
-    { layerHeight: 0, baseLayerHeight: 0.09 },
-  ));
-});
-
-test('fitted size keeps the crop aspect inside the maximum bounds', () => {
-  const wide = resolvePrintSize(293, 326, settings);
-  assert.equal(wide.widthMm, 82.44);
-  assert.equal(wide.heightMm, 91.725);
-  nearly(wide.widthMm / wide.heightMm, 293 / 326, 1e-4);
-  assert.equal(wide.insetMm, frameInsetMm(0.2, wide.heightMm));
-  assert.equal(wide.insetMm, 1.6);
-  assert.equal(wide.innerWidthMm, 79.24);
-  assert.equal(wide.innerHeightMm, 88.525);
-  assert.ok(wide.widthMm <= settings.width);
-  assert.ok(wide.heightMm <= settings.height);
-
-  const tall = resolvePrintSize(100, 400, settings);
-  assert.equal(tall.heightMm, 105.45);
-  assert.equal(tall.widthMm, 26.363);
-  assert.ok(tall.widthMm <= settings.width);
-
-  const matched = resolvePrintSize(8244, 10545, settings);
-  assert.equal(matched.widthMm, 82.44);
-  assert.equal(matched.heightMm, 105.45);
-});
-
-test('grid step is at least the nozzle and stays under the cell cap', () => {
-  const grid = gridCells(79.24, 88.525, 0.2);
-  assert.ok(grid.stepMm >= 0.2 - 1e-6);
-  assert.ok(grid.cols <= 140);
-  assert.ok(grid.rows <= 140);
-  assert.equal(grid.rows, 140);
-
-  const coarse = gridCells(2, 2, 0.2);
-  assert.equal(coarse.cols, 10);
-  assert.equal(coarse.rows, 10);
-  assert.equal(coarse.stepMm, 0.2);
-});
-
-test('binary and ASCII STLs match the backing, relief, and frame dimensions', () => {
-  const filaments = [
-    { name: 'Elegoo PLA Black', hex: '#161616', td: 0.5 },
-    { name: 'Elegoo PLA Dark Blue', hex: '#1A3E78', td: 0.04 },
-    { name: 'Elegoo PLA Red', hex: '#D4252B', td: 0.08 },
-  ];
-  const built = buildHueforgeMeshes({
-    cropWidthPx: 293,
-    cropHeightPx: 326,
-    luminance: new Float32Array([1, 1, 1, 1]),
-    filaments,
-    boundaries: [0.33, 0.66],
-    settings,
-    settingsSource: 'test',
-    grid: { cols: 1, rows: 1 },
-  });
-
-  assert.equal(built.reliefPlaceholder, false);
-  assert.equal(built.backing.length, 12);
-  assert.equal(built.relief.length, 12);
-  assert.equal(built.frame.length, 48);
-  pointsOutward(built.backing);
-  pointsOutward(built.relief);
-
-  const backingBounds = triangleBounds(built.backing);
-  nearly(backingBounds.min[0], 0);
-  nearly(backingBounds.min[1], 0);
-  nearly(backingBounds.min[2], 0);
-  nearly(backingBounds.max[0], 82.44);
-  nearly(backingBounds.max[1], 91.725);
-  nearly(backingBounds.max[2], 0.09);
-
-  const reliefBounds = triangleBounds(built.relief);
-  nearly(reliefBounds.min[0], 1.6);
-  nearly(reliefBounds.min[1], 1.6);
-  nearly(reliefBounds.min[2], 0.09);
-  nearly(reliefBounds.max[0], 1.6 + 79.24);
-  nearly(reliefBounds.max[1], 1.6 + 88.525);
-  nearly(reliefBounds.max[2], 0.21);
-
-  const frameBounds = triangleBounds(built.frame);
-  nearly(frameBounds.min[0], 0);
-  nearly(frameBounds.min[1], 0);
-  nearly(frameBounds.min[2], 0.09);
-  nearly(frameBounds.max[0], 82.44);
-  nearly(frameBounds.max[1], 91.725);
-  nearly(frameBounds.max[2], 0.21);
-
-  const opening = built.frame.filter((triangle) => triangle.verts.every((vertex) => (
-    vertex[0] > built.size.insetMm + 1e-4
-    && vertex[0] < built.size.widthMm - built.size.insetMm - 1e-4
-    && vertex[1] > built.size.insetMm + 1e-4
-    && vertex[1] < built.size.heightMm - built.size.insetMm - 1e-4
-  )));
-  assert.equal(opening.length, 0);
-
-  const binary = encodeBinaryStl(built.backing, 'backing');
-  assert.equal(binary.byteLength, 84 + built.backing.length * 50);
-  const decoded = decodeBinaryStl(binary);
-  assert.equal(decoded.length, 12);
-  const decodedBounds = triangleBounds(decoded);
-  nearly(decodedBounds.max[0], 82.44, 1e-3);
-  nearly(decodedBounds.max[1], 91.725, 1e-3);
-  nearly(decodedBounds.max[2], 0.09, 1e-4);
-
-  const ascii = encodeAsciiStl(built.backing, 'backing');
-  assert.match(ascii, /^solid backing\n/);
-  assert.match(ascii, /endsolid backing\n$/);
-  assert.equal(ascii.split('facet normal').length - 1, 12);
-  const asciiVerts = [...ascii.matchAll(/vertex\s+(\S+)\s+(\S+)\s+(\S+)/g)].map((match) => (
-    [Number(match[1]), Number(match[2]), Number(match[3])]
-  ));
-  const asciiMaxZ = Math.max(...asciiVerts.map((vertex) => vertex[2]));
-  const asciiMaxX = Math.max(...asciiVerts.map((vertex) => vertex[0]));
-  nearly(asciiMaxX, 82.44, 1e-4);
-  nearly(asciiMaxZ, 0.09, 1e-4);
-
-  assert.match(built.details, /backing\.stl/);
-  assert.match(built.details, /relief\.stl/);
-  assert.match(built.details, /frame\.stl/);
-  assert.match(built.details, /Layer 1 \| Z 0\.000 mm/);
-  assert.match(built.details, /Elegoo PLA Black \| #161616/);
-  assert.match(built.details, /outerWidth_mm: 82\.440/);
-  assert.match(built.details, /outerHeight_mm: 91\.725/);
-  assert.match(built.details, /baseLayerHeight_mm: 0\.090/);
-  assert.match(built.details, /layerHeight_mm: 0\.040/);
-  assert.match(built.details, /RELIEF_PLACEHOLDER: no/);
-  assert.match(built.details, /source: test/);
-});
-
-test('the top of the image is placed at maximum Y', () => {
-  const built = buildHueforgeMeshes({
-    cropWidthPx: 293,
-    cropHeightPx: 326,
-    luminance: new Float32Array([1, 1, 0, 0]),
-    filaments: [
-      { name: 'Black', hex: '#111111', td: 1 },
-      { name: 'White', hex: '#eeeeee', td: 0.04 },
-    ],
-    boundaries: [0.5],
-    settings,
-    grid: { cols: 1, rows: 1 },
-  });
-  const high = built.relief.flatMap((triangle) => triangle.verts)
-    .filter((vertex) => Math.abs(vertex[1] - (built.size.insetMm + built.size.innerHeightMm)) < 1e-3);
-  const low = built.relief.flatMap((triangle) => triangle.verts)
-    .filter((vertex) => Math.abs(vertex[1] - built.size.insetMm) < 1e-3);
-  const highZ = Math.max(...high.map((vertex) => vertex[2]));
-  const lowZ = Math.max(...low.map((vertex) => vertex[2]));
-  assert.ok(highZ > lowZ + 0.03, `expected the image top to be taller (${highZ} vs ${lowZ})`);
-});
-
-test('a flat backing image still writes a valid closed relief', () => {
-  const built = buildHueforgeMeshes({
-    cropWidthPx: 100,
-    cropHeightPx: 100,
-    luminance: new Float32Array([0, 0, 0, 0]),
-    filaments: [
-      { name: 'Black', hex: '#111111', td: 1 },
-      { name: 'White', hex: '#eeeeee', td: 0.04 },
-    ],
-    boundaries: [0.5],
-    settings,
-    grid: { cols: 1, rows: 1 },
-  });
-  assert.equal(built.reliefPlaceholder, true);
-  assert.match(built.details, /RELIEF_PLACEHOLDER: yes/);
-  const binary = encodeBinaryStl(built.relief, 'relief');
-  const decoded = decodeBinaryStl(binary);
-  assert.equal(decoded.length, 12);
-  const bounds = triangleBounds(decoded);
-  nearly(bounds.max[2] - bounds.min[2], settings.layerHeight, 1e-4);
-  assert.match(encodeAsciiStl(built.frame, 'frame'), /endsolid frame/);
-});
-
-test('two constant cells do not grow an internal wall', () => {
-  const built = buildHueforgeMeshes({
-    cropWidthPx: 293,
-    cropHeightPx: 326,
-    luminance: new Float32Array(6).fill(1),
-    filaments: [
-      { name: 'Black', hex: '#111111', td: 1 },
-      { name: 'White', hex: '#eeeeee', td: 0.04 },
-    ],
-    boundaries: [0.5],
-    settings,
-    grid: { cols: 2, rows: 1 },
-  });
-  assert.equal(built.relief.length, 20);
-});
-
-test('a zip bundle round-trips the binary backing mesh', async () => {
-  const built = buildHueforgeMeshes({
-    cropWidthPx: 200,
-    cropHeightPx: 200,
-    luminance: new Float32Array([1, 1, 1, 1]),
-    filaments: [
-      { name: 'Black', hex: '#111111', td: 1 },
-      { name: 'White', hex: '#eeeeee', td: 0.08 },
-    ],
-    boundaries: [0.5],
-    settings,
-    grid: { cols: 1, rows: 1 },
-  });
-  const zip = new JSZip();
-  zip.file('backing.stl', encodeBinaryStl(built.backing, 'backing'));
-  zip.file('relief.stl', encodeBinaryStl(built.relief, 'relief'));
-  zip.file('frame.stl', encodeBinaryStl(built.frame, 'frame'));
-  zip.file('details.txt', built.details);
-  const names = Object.keys(zip.files).sort();
-  assert.deepEqual(names, ['backing.stl', 'details.txt', 'frame.stl', 'relief.stl']);
-  const backing = await zip.file('backing.stl')!.async('uint8array');
-  assert.equal(decodeBinaryStl(backing).length, built.backing.length);
-  const details = await zip.file('details.txt')!.async('string');
-  assert.match(details, /nozzleSize_mm: 0\.200/);
-});
+function pairedEdges(triangles: Triangle[]): boolean {
+  const counts = new Map<string, number>();
+  const key = (a: Triangle['verts'][number], b: Triangle['verts'][number]) => {
+    const quant = (value: number) => Math.round(value * 1000);
+    const left = `${quant(a[0])},${quant(a[1])},${quant(a[2])}`;
+    const right = `${quant(b[0])},${quant(b[1])},${quant(b[2])}`;
+    return left < right ? `${left}|${right}` : `${right}|${left}`;
+  };
+  for (const triangle of triangles) {
+    const [a, b, c] = triangle.verts;
+    for (const edge of [[a, b], [b, c], [c, a]] as const) {
+      const id = key(edge[0], edge[1]);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  for (const count of counts.values()) {
+    if (count !== 2) return false;
+  }
+  return counts.size > 0;
+}

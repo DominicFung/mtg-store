@@ -1,19 +1,55 @@
 export type Rgb = [number, number, number];
 
 /**
- * Optical thickness, in millimetres, treated as one full colour step in the
- * preview. This is not a single printed toolpath. It is a stand-in so the
- * placeholder transmission distances still resolve into visible bands.
+ * HueForge's published definition: TD is the thickness that blocks about 95%
+ * of the light, so transmission at one TD is 0.05.
+ *
+ * The colour core in brigid-case-2-back is much more opaque than that curve.
+ * Raising the exponent by this density reproduces the white cap and the
+ * ice-blue slider on that core (density 1 stays a grey wash). It is a
+ * calibration against that screenshot, not a second measurement of TD.
  */
-export const NOMINAL_LAYER_MM = 6;
+export const TRANSMISSION_DENSITY = 10;
 
-/** Share of each luminance band used to ease in the next filament. */
-const BAND_RAMP = 0.22;
+/** HueForge "Smoothing 4": blur radius in detail-size samples. */
+export const DEFAULT_SMOOTHING = 4;
+
+/** Combo slider at 1 is standard luminance. 0 is max-channel. */
+export const DEFAULT_COMBO_WEIGHT = 1;
+
+const UM = 1000;
+
+export type LayerSettings = {
+  layerHeight: number;
+  baseLayerHeight: number;
+  minDepth: number;
+  maxDepth: number;
+};
+
+export type DescribeFilament = {
+  /** Polymer. Missing values are PLA. */
+  type?: string | null;
+  brand?: string | null;
+  /** Short colour name. Swap lines use this. */
+  name: string;
+  td: number;
+};
+
+export type CoreStop = {
+  filament: DescribeFilament;
+  rgb: Rgb;
+  /** Inclusive 1-based layer where this filament ends. */
+  endLayer: number;
+};
 
 export function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
+}
+
+export function mmToUm(mm: number): number {
+  return Math.round(mm * UM);
 }
 
 export function hexToRgb(hex: string): Rgb {
@@ -24,139 +60,435 @@ export function hexToRgb(hex: string): Rgb {
   return [(parsed >> 16) & 255, (parsed >> 8) & 255, parsed & 255];
 }
 
-/** Rec. 709 relative luminance for sRGB bytes, in 0..1. */
-export function relativeLuminance(red: number, green: number, blue: number): number {
+/** Rec. 709 luminance of sRGB bytes, 0..1. HueForge's standard / lithophane brightness. */
+export function standardLuminance(red: number, green: number, blue: number): number {
   return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
 }
 
-export function stretchLuminance(luminance: number, min: number, max: number): number {
-  const span = max - min;
-  if (span < 0.04) return clamp01(luminance);
-  return clamp01((luminance - min) / span);
+export function maxChannelLuminance(red: number, green: number, blue: number): number {
+  return Math.max(red, green, blue) / 255;
 }
 
-/** 1st and 99th percentile of opaque pixels, as 0..1 luminance. */
-export function luminanceBounds(luma: ArrayLike<number>, alpha: ArrayLike<number>): [number, number] {
-  const histogram = new Uint32Array(256);
-  let count = 0;
-  for (let index = 0; index < luma.length; index += 1) {
-    if (alpha[index] < 16) continue;
-    const bin = Math.max(0, Math.min(255, Math.round(luma[index] * 255)));
-    histogram[bin] += 1;
-    count += 1;
-  }
-  if (count === 0) return [0, 1];
-  const lowCut = count * 0.01;
-  const highCut = count * 0.99;
-  let seen = 0;
-  let low = 0;
-  for (let bin = 0; bin < 256; bin += 1) {
-    seen += histogram[bin];
-    if (seen >= lowCut) {
-      low = bin;
-      break;
-    }
-  }
-  seen = 0;
-  let high = 255;
-  for (let bin = 0; bin < 256; bin += 1) {
-    seen += histogram[bin];
-    if (seen >= highCut) {
-      high = bin;
-      break;
-    }
-  }
-  if (high - low < 8) return [0, 1];
-  return [low / 255, high / 255];
+/**
+ * Combo luminance. Weight 1 is standard (brighter = taller). Weight 0 is the
+ * max RGB channel. HueForge's default combo slider is standard.
+ */
+export function comboLuminance(red: number, green: number, blue: number, weight = DEFAULT_COMBO_WEIGHT): number {
+  const mix = clamp01(weight);
+  return standardLuminance(red, green, blue) * mix
+    + maxChannelLuminance(red, green, blue) * (1 - mix);
 }
 
-export function equalBoundaries(layerCount: number): number[] {
-  const boundaries: number[] = [];
-  for (let index = 1; index < layerCount; index += 1) {
-    boundaries.push(round4(index / layerCount));
-  }
-  return boundaries;
+/** Z at the top of a 1-based layer, in microns. Layer 1 ends at the base height. */
+export function layerTopUm(layer: number, settings: Pick<LayerSettings, 'baseLayerHeight' | 'layerHeight'>): number {
+  if (layer <= 0) return 0;
+  const base = mmToUm(settings.baseLayerHeight);
+  const step = mmToUm(settings.layerHeight);
+  return base + (layer - 1) * step;
 }
 
-export function boundariesAfterAdd(boundaries: number[]): number[] {
-  const last = boundaries.length > 0 ? boundaries[boundaries.length - 1] : 0;
-  return [...boundaries, round4((last + 1) / 2)];
+export function layerTopMm(layer: number, settings: Pick<LayerSettings, 'baseLayerHeight' | 'layerHeight'>): number {
+  return layerTopUm(layer, settings) / UM;
 }
 
-export function boundariesAfterRemove(boundaries: number[], index: number, layerCount: number): number[] {
-  if (index >= layerCount - 1) return boundaries.slice(0, -1);
-  return boundaries.filter((_, boundaryIndex) => boundaryIndex !== index);
+/**
+ * Colour-core layer count. The layer whose top meets Max Depth, plus one so
+ * Actual Depth can sit a layer above Max Depth (2.01 → layer 49, core → 50,
+ * top 2.05 when the base is 0.09 and the step is 0.04).
+ */
+export function colorCoreLayerCount(settings: LayerSettings): number {
+  const step = mmToUm(settings.layerHeight);
+  if (step <= 0) return 1;
+  const steps = Math.round((mmToUm(settings.maxDepth) - mmToUm(settings.baseLayerHeight)) / step);
+  return Math.max(1, steps + 2);
 }
 
-/** Band index for a luminance. The boundary value itself stays with the lower layer. */
-export function bandIndex(luminance: number, boundaries: readonly number[]): number {
-  const value = clamp01(luminance);
-  for (let index = 0; index < boundaries.length; index += 1) {
-    if (value <= boundaries[index]) return index;
-  }
-  return boundaries.length;
+/** 1-based layer whose top is nearest to this depth. */
+export function layerForDepth(depthMm: number, settings: Pick<LayerSettings, 'baseLayerHeight' | 'layerHeight'>): number {
+  const step = mmToUm(settings.layerHeight);
+  if (step <= 0) return 1;
+  return Math.max(1, Math.round((mmToUm(depthMm) - mmToUm(settings.baseLayerHeight)) / step) + 1);
 }
 
-function round4(value: number): number {
-  return Math.round(value * 10000) / 10000;
+export function minBlendLayer(settings: LayerSettings): number {
+  return Math.min(layerForDepth(settings.minDepth, settings), colorCoreLayerCount(settings));
+}
+
+/**
+ * Standard brightness compensation. A mild power curve pulls midtones down the
+ * core so a dark blue rock stays near the backing filament while highlights
+ * still reach the top. 1 is linear.
+ */
+export const BRIGHTNESS_GAMMA = 1.6;
+
+/** Standard mode: 0 maps to Min Depth, 1 maps to the top of the colour core. */
+export function layerForLuminance(
+  luminance: number,
+  minLayer: number,
+  maxLayer: number,
+  gamma = BRIGHTNESS_GAMMA,
+): number {
+  if (maxLayer <= minLayer) return minLayer;
+  const shaped = gamma === 1 ? clamp01(luminance) : clamp01(luminance) ** gamma;
+  return minLayer + Math.round(shaped * (maxLayer - minLayer));
+}
+
+export function transmission(thicknessMm: number, tdMm: number, density = TRANSMISSION_DENSITY): number {
+  if (thicknessMm <= 0) return 1;
+  if (tdMm <= 0) return 0;
+  return 0.05 ** ((thicknessMm / tdMm) * density);
+}
+
+export function blendOver(under: Rgb, over: Rgb, thicknessMm: number, tdMm: number): Rgb {
+  const pass = transmission(thicknessMm, tdMm);
+  const cover = 1 - pass;
+  return [
+    under[0] * pass + over[0] * cover,
+    under[1] * pass + over[1] * cover,
+    under[2] * pass + over[2] * cover,
+  ];
 }
 
 function clampByte(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function mix(under: Rgb, over: Rgb, absorption: number): Rgb {
-  const keep = 1 - absorption;
-  return [
-    under[0] * keep + over[0] * absorption,
-    under[1] * keep + over[1] * absorption,
-    under[2] * keep + over[2] * absorption,
-  ];
+/**
+ * Predicted colour of a column that ends at `layer`.
+ * The bottom filament is an opaque backing. Each filament above it covers
+ * the stack across the layers of that stop which are actually present.
+ */
+export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings: LayerSettings): Rgb {
+  if (stops.length === 0) return [128, 128, 128];
+  const target = Math.max(1, layer);
+  let color: Rgb = [stops[0].rgb[0], stops[0].rgb[1], stops[0].rgb[2]];
+  let previousEnd = 0;
+  for (let index = 0; index < stops.length; index += 1) {
+    const stop = stops[index];
+    const from = previousEnd + 1;
+    const to = Math.min(stop.endLayer, target);
+    if (index > 0 && to >= from) {
+      const thicknessMm = (layerTopUm(to, settings) - layerTopUm(from - 1, settings)) / UM;
+      color = blendOver(color, stop.rgb, thicknessMm, stop.filament.td);
+    }
+    if (target <= stop.endLayer) break;
+    previousEnd = stop.endLayer;
+  }
+  return [clampByte(color[0]), clampByte(color[1]), clampByte(color[2])];
+}
+
+export function layerPalette(stops: readonly CoreStop[], settings: LayerSettings, layerCount: number): Rgb[] {
+  const colors: Rgb[] = [];
+  for (let layer = 1; layer <= layerCount; layer += 1) {
+    colors.push(colorAtLayer(layer, stops, settings));
+  }
+  return colors;
+}
+
+export function formatHueNumber(value: number, decimals = 2): string {
+  const factor = 10 ** decimals;
+  const rounded = Math.round(value * factor) / factor;
+  return rounded.toFixed(decimals).replace(/\.?0+$/, '');
+}
+
+export function formatSwapDepth(layer: number, settings: Pick<LayerSettings, 'baseLayerHeight' | 'layerHeight'>): string {
+  return (layerTopUm(layer, settings) / UM).toFixed(2);
+}
+
+export function filamentType(filament: DescribeFilament): string {
+  const raw = (filament.type ?? '').trim();
+  return (raw || 'PLA').toUpperCase();
+}
+
+const NAME_PREFIX = /^(PLA|PETG|ABS|ASA|TPU|SILK|MATTE|PRO|BASIC)\s+/i;
+
+/** Swap lines use the short colour. Catalogue rows store a longer product name. */
+export function shortFilamentName(filament: DescribeFilament): string {
+  let name = filament.name.trim();
+  const brand = (filament.brand ?? '').trim();
+  if (brand && name.toLowerCase().startsWith(brand.toLowerCase())) {
+    name = name.slice(brand.length).trim();
+  }
+  for (let pass = 0; pass < 4; pass += 1) {
+    const next = name.replace(NAME_PREFIX, '');
+    if (next === name) break;
+    name = next;
+  }
+  return name || filament.name.trim();
+}
+
+export function filamentUsedLine(filament: DescribeFilament): string {
+  const parts = [filamentType(filament), (filament.brand ?? '').trim(), shortFilamentName(filament)]
+    .filter((part) => part.length > 0);
+  return `${parts.join(' ')} Transmission Distance: ${formatHueNumber(filament.td, 4)}`;
+}
+
+function uniqueFilamentCount(stops: readonly CoreStop[]): number {
+  const seen = new Set(stops.map((stop) => {
+    const filament = stop.filament;
+    return [
+      filamentType(filament),
+      (filament.brand ?? '').trim().toLowerCase(),
+      shortFilamentName(filament).toLowerCase(),
+    ].join('|');
+  }));
+  return seen.size;
+}
+
+function mixedFilamentTypes(stops: readonly CoreStop[]): boolean {
+  const types = new Set(stops.map((stop) => filamentType(stop.filament)));
+  return types.size > 1;
 }
 
 /**
- * Colour of one pixel.
- * Layers run bottom to top. The bottom filament is an opaque backing.
- * Each higher filament covers the stack with Beer's law using its transmission
- * distance, eased in across the start of its luminance band so the regions
- * stay readable instead of becoming one smooth gradient.
+ * HueForge describe text. Project name is the only caller-chosen token.
+ * Max Depth and Actual Depth are whole millimetres. Swap depths keep two
+ * decimals. Transmission distances drop trailing zeros.
  */
-export function colorForLuminance(
-  luminance: number,
-  colors: Rgb[],
-  transmissionDistances: number[],
-  boundaries: number[],
-): Rgb {
-  if (colors.length === 0) return [128, 128, 128];
-  const band = Math.min(bandIndex(luminance, boundaries), colors.length - 1);
-  const edges = [0, ...boundaries, 1];
-  let red = colors[0][0];
-  let green = colors[0][1];
-  let blue = colors[0][2];
-
-  for (let index = 1; index <= band; index += 1) {
-    const start = edges[index] ?? 0;
-    const end = edges[index + 1] ?? 1;
-    const span = Math.max(end - start, 1e-4);
-    const frac = index < band ? 1 : clamp01((luminance - start) / span);
-    const ramp = frac >= BAND_RAMP ? 1 : frac / BAND_RAMP;
-    const td = Math.max(transmissionDistances[index] ?? 1, 0.05);
-    const absorption = 1 - Math.exp(-(ramp * NOMINAL_LAYER_MM) / td);
-    const mixed = mix([red, green, blue], colors[index], absorption);
-    red = mixed[0];
-    green = mixed[1];
-    blue = mixed[2];
+export function formatDetails(input: {
+  projectName: string;
+  widthMm: number;
+  heightMm: number;
+  settings: LayerSettings;
+  stops: readonly CoreStop[];
+}): string {
+  const { settings, stops } = input;
+  if (stops.length === 0) throw new Error('Choose at least one filament');
+  const actualDepth = layerTopMm(stops[stops.length - 1].endLayer, settings);
+  const lines = [
+    `Project: ${input.projectName}`,
+    `Print at 100% infill with a layer height of ${formatHueNumber(settings.layerHeight)}mm with a base layer of ${formatHueNumber(settings.baseLayerHeight)}mm`,
+    '',
+    ` The Model is ${formatHueNumber(input.widthMm)}x${formatHueNumber(input.heightMm)}mm in size`,
+    ` You may print at higher layer heights below the Min Depth of ${formatHueNumber(settings.minDepth)}mm`,
+    ` The Max Depth is ${Math.round(settings.maxDepth)}mm and the Actual Depth is ${Math.round(actualDepth)}mm`,
+    '',
+    'Filaments Used:',
+    ...stops.map((stop) => `\t${filamentUsedLine(stop.filament)}`),
+    `This print uses ${uniqueFilamentCount(stops)} unique filaments`,
+    '',
+  ];
+  if (mixedFilamentTypes(stops)) {
+    lines.push('!!!!  It appears you have mixed filament types.  Be certain this is what you want.  !!!!!');
+    lines.push('');
   }
-
-  return [clampByte(red), clampByte(green), clampByte(blue)];
+  lines.push('Swap Instructions:');
+  lines.push(`\tStart with ${shortFilamentName(stops[0].filament)}`);
+  for (let index = 0; index < stops.length - 1; index += 1) {
+    const next = stops[index + 1];
+    const rest = index === stops.length - 2 ? ' for the rest.' : '';
+    lines.push(
+      `\tAt layer #${stops[index].endLayer} (${formatSwapDepth(stops[index].endLayer, settings)}mm) swap to ${shortFilamentName(next.filament)}${rest}`,
+    );
+  }
+  return `${lines.join('\n')}\n`;
 }
 
-export function stackGradient(colors: Rgb[], transmissionDistances: number[], boundaries: number[], steps = 24): string {
-  const stops: string[] = [];
-  for (let step = 0; step <= steps; step += 1) {
-    const luminance = step / steps;
-    const [red, green, blue] = colorForLuminance(luminance, colors, transmissionDistances, boundaries);
-    stops.push(`rgb(${red}, ${green}, ${blue}) ${(luminance * 100).toFixed(2)}%`);
+export function evenStops(count: number, layerCount: number): number[] {
+  const total = Math.max(1, layerCount);
+  const n = Math.max(1, Math.min(count, total));
+  const stops: number[] = [];
+  let previous = 0;
+  for (let index = 1; index <= n; index += 1) {
+    const target = index === n ? total : Math.round((index * total) / n);
+    const roomForRest = n - index;
+    const end = Math.min(total - roomForRest, Math.max(previous + 1, target));
+    stops.push(end);
+    previous = end;
   }
-  return `linear-gradient(to right, ${stops.join(', ')})`;
+  stops[stops.length - 1] = total;
+  return stops;
+}
+
+export function insertStop(stops: readonly number[]): { stops: number[]; index: number } {
+  if (stops.length === 0) return { stops: [1], index: 0 };
+  let previous = 0;
+  let gapIndex = 0;
+  let gapSize = 0;
+  for (let index = 0; index < stops.length; index += 1) {
+    const size = stops[index] - previous;
+    if (size >= gapSize) {
+      gapSize = size;
+      gapIndex = index;
+    }
+    previous = stops[index];
+  }
+  if (gapSize < 2) return { stops: [...stops], index: -1 };
+  const before = gapIndex === 0 ? 0 : stops[gapIndex - 1];
+  const endLayer = Math.min(stops[gapIndex] - 1, Math.max(before + 1, before + Math.floor(gapSize / 2)));
+  const next = stops.slice();
+  next.splice(gapIndex, 0, endLayer);
+  return { stops: next, index: gapIndex };
+}
+
+export function removeStop(stops: readonly number[], index: number): number[] {
+  if (stops.length <= 1 || index < 0 || index >= stops.length) return [...stops];
+  const top = stops[stops.length - 1];
+  const next = stops.filter((_, stopIndex) => stopIndex !== index);
+  next[next.length - 1] = top;
+  for (let cursor = next.length - 2; cursor >= 0; cursor -= 1) {
+    if (next[cursor] >= next[cursor + 1]) next[cursor] = next[cursor + 1] - 1;
+  }
+  return next;
+}
+
+export function moveStop(stops: readonly number[], index: number, endLayer: number, layerCount: number): number[] {
+  if (index < 0 || index >= stops.length) return [...stops];
+  const next = stops.slice();
+  const min = index === 0 ? 1 : next[index - 1] + 1;
+  const max = index === next.length - 1 ? layerCount : next[index + 1] - 1;
+  next[index] = Math.min(max, Math.max(min, Math.round(endLayer)));
+  return next;
+}
+
+export function clampStops(stops: readonly number[], layerCount: number): number[] {
+  const total = Math.max(1, layerCount);
+  if (stops.length === 0) return [total];
+  const next = stops.map((stop) => Math.min(total, Math.max(1, Math.round(stop))));
+  for (let index = 1; index < next.length; index += 1) {
+    if (next[index] <= next[index - 1]) next[index] = Math.min(total, next[index - 1] + 1);
+  }
+  for (let index = next.length - 2; index >= 0; index -= 1) {
+    if (next[index] >= next[index + 1]) next[index] = next[index + 1] - 1;
+  }
+  if (next.some((stop) => stop < 1)) return evenStops(stops.length, total);
+  return next;
+}
+
+function sampleClamp(source: Float32Array, width: number, height: number, x: number, y: number): number {
+  const xx = Math.min(width - 1, Math.max(0, x));
+  const yy = Math.min(height - 1, Math.max(0, y));
+  return source[yy * width + xx];
+}
+
+/** Box blur. Radius is in pixels of this buffer. */
+export function smoothLuminance(source: Float32Array, width: number, height: number, radius: number): Float32Array {
+  const r = Math.round(radius);
+  if (r <= 0 || width < 1 || height < 1) return source;
+  const horizontal = new Float32Array(source.length);
+  const output = new Float32Array(source.length);
+  const window = r * 2 + 1;
+  for (let y = 0; y < height; y += 1) {
+    let sum = 0;
+    for (let k = -r; k <= r; k += 1) sum += sampleClamp(source, width, height, k, y);
+    for (let x = 0; x < width; x += 1) {
+      horizontal[y * width + x] = sum / window;
+      sum -= sampleClamp(source, width, height, x - r, y);
+      sum += sampleClamp(source, width, height, x + r + 1, y);
+    }
+  }
+  for (let x = 0; x < width; x += 1) {
+    let sum = 0;
+    for (let k = -r; k <= r; k += 1) sum += sampleClamp(horizontal, width, height, x, k);
+    for (let y = 0; y < height; y += 1) {
+      output[y * width + x] = sum / window;
+      sum -= sampleClamp(horizontal, width, height, x, y - r);
+      sum += sampleClamp(horizontal, width, height, x, y + r + 1);
+    }
+  }
+  return output;
+}
+
+export function bilinear(source: Float32Array, width: number, height: number, u: number, v: number): number {
+  if (width <= 1 && height <= 1) return source[0] ?? 0;
+  const x = clamp01(u) * (width - 1);
+  const y = clamp01(v) * (height - 1);
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const tx = x - x0;
+  const ty = y - y0;
+  const at = (xx: number, yy: number) => source[yy * width + xx];
+  const top = at(x0, y0) * (1 - tx) + at(x1, y0) * tx;
+  const bottom = at(x0, y1) * (1 - tx) + at(x1, y1) * tx;
+  return top * (1 - ty) + bottom * ty;
+}
+
+export function luminanceFromRgba(
+  rgba: ArrayLike<number>,
+  width: number,
+  height: number,
+  comboWeight = DEFAULT_COMBO_WEIGHT,
+): Float32Array {
+  const luma = new Float32Array(width * height);
+  for (let pixel = 0, offset = 0; pixel < luma.length; pixel += 1, offset += 4) {
+    luma[pixel] = comboLuminance(rgba[offset], rgba[offset + 1], rgba[offset + 2], comboWeight);
+  }
+  return luma;
+}
+
+/**
+ * Blur radius in pixels so `smoothing` detail-samples stay the same physical
+ * size when the buffer is coarser or finer than the mesh detail size.
+ */
+export function smoothingRadiusPx(
+  pixelWidth: number,
+  modelWidthMm: number,
+  detailSizeMm: number,
+  smoothing = DEFAULT_SMOOTHING,
+): number {
+  if (smoothing <= 0 || modelWidthMm <= 0 || pixelWidth <= 0) return 0;
+  return (smoothing * pixelWidth * detailSizeMm) / modelWidthMm;
+}
+
+export type RenderInput = {
+  rgba: Uint8ClampedArray | Uint8Array;
+  width: number;
+  height: number;
+  modelWidthMm: number;
+  modelHeightMm: number;
+  stops: readonly CoreStop[];
+  settings: LayerSettings & { detailSize?: number };
+  smoothing?: number;
+  /** Bake a simple front light so the relief reads the way HueForge's lit preview does. */
+  shade?: boolean;
+};
+
+export function renderBlendedRgba(input: RenderInput): Uint8ClampedArray {
+  const { width, height, settings, stops } = input;
+  const detail = input.settings.detailSize ?? 0.1;
+  const radius = smoothingRadiusPx(width, input.modelWidthMm, detail, input.smoothing ?? DEFAULT_SMOOTHING);
+  const luma = smoothLuminance(luminanceFromRgba(input.rgba, width, height), width, height, radius);
+  const layerCount = Math.max(1, stops.length ? stops[stops.length - 1].endLayer : colorCoreLayerCount(settings));
+  const minLayer = Math.min(minBlendLayer(settings), layerCount);
+  const palette = layerPalette(stops, settings, layerCount);
+  const output = new Uint8ClampedArray(width * height * 4);
+  const pixelMmX = input.modelWidthMm / Math.max(1, width);
+  const pixelMmY = input.modelHeightMm / Math.max(1, height);
+  const heightAt = (x: number, y: number) => {
+    const sample = bilinear(luma, width, height, x / Math.max(1, width - 1), y / Math.max(1, height - 1));
+    return layerTopMm(layerForLuminance(sample, minLayer, layerCount), settings);
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const offset = index * 4;
+      const layer = layerForLuminance(luma[index], minLayer, layerCount);
+      let [red, green, blue] = palette[layer - 1] ?? palette[0];
+      if (input.shade) {
+        const zLeft = heightAt(x - 1, y);
+        const zRight = heightAt(x + 1, y);
+        const zUp = heightAt(x, y - 1);
+        const zDown = heightAt(x, y + 1);
+        const dx = (zRight - zLeft) / (2 * pixelMmX);
+        const dy = (zDown - zUp) / (2 * pixelMmY);
+        const len = Math.hypot(dx, dy, 1);
+        const nz = 1 / len;
+        const nx = -dx / len;
+        const ny = -dy / len;
+        const light = nx * 0.15 + ny * -0.35 + nz * 0.85;
+        const gain = 0.62 + 0.5 * Math.max(0, Math.min(1, light));
+        red = clampByte(red * gain);
+        green = clampByte(green * gain);
+        blue = clampByte(blue * gain);
+      }
+      output[offset] = red;
+      output[offset + 1] = green;
+      output[offset + 2] = blue;
+      output[offset + 3] = input.rgba[offset + 3];
+    }
+  }
+  return output;
 }

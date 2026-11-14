@@ -17,10 +17,13 @@ type Filament {
   finish: String
   sortOrder: Int
   approximate: Boolean
+  # Polymer, PLA when the row has no type. Additive; existing items stay valid.
+  type: String
 }
 
-# Distances are millimetres. width and height are maximum bounds;
-# the deck-box preview fits the crop inside them.
+# Distances are millimetres. height is the shared face height; each crop's
+# width follows its aspect. width remains the nominal back-face width.
+# minDepth, maxDepth, borderWidth, borderDepth, and detailSize are additive.
 type PrintSettings {
   id: ID!
   layerHeight: Float!
@@ -28,6 +31,11 @@ type PrintSettings {
   width: Float!
   height: Float!
   nozzleSize: Float!
+  minDepth: Float!
+  maxDepth: Float!
+  borderWidth: Float!
+  borderDepth: Float!
+  detailSize: Float!
 }
 
 input UpdatePrintSettingsInput {
@@ -36,6 +44,11 @@ input UpdatePrintSettingsInput {
   width: Float!
   height: Float!
   nozzleSize: Float!
+  minDepth: Float
+  maxDepth: Float
+  borderWidth: Float
+  borderDepth: Float
+  detailSize: Float
 }
 
 type Query {

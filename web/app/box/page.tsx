@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ImageCropper, { CropBox } from './imageCropper';
 import SpinningBoxWithTextures from './spinningBox';
-import FilamentStack from './filamentStack';
+import ColorCore from './colorCore';
 import { useCart } from '../lib/useCart';
 import { useFilaments } from '../lib/filaments';
 import {
@@ -13,10 +13,10 @@ import {
   FilamentLayerSettings,
   MOCK_FILAMENTS,
 } from '../lib/filamentCatalogue';
-import { equalBoundaries } from '../lib/hueforge';
+import { colorCoreLayerCount, evenStops, formatSwapDepth, shortFilamentName } from '../lib/hueforge';
 import { downloadPrintBundle } from '../lib/printBundle';
-import { formatMm, planLayerSwaps, resolvePrintSize } from '../lib/printGeometry';
-import { renderLayeredCrops } from '../lib/renderLayers';
+import { modelSizeForCrop } from '../lib/printGeometry';
+import { renderLayeredCrops, toCoreStops } from '../lib/renderLayers';
 import { usePrintSettings } from '../lib/usePrintSettings';
 import horizonSample from './sample.webp';
 import landscapeSample from './mana-landscape.png';
@@ -30,17 +30,18 @@ const SAMPLES = [
 ];
 
 const startingLayers = defaultLayerSelection(MOCK_FILAMENTS);
+const FACE_NAMES = ['Front', 'Spine', 'Back'] as const;
 
 export default function Home() {
   const [step, setStep] = useState(1);
   const [image, setImage] = useState<string | null>(null);
   const [crops, setCrops] = useState<[string, string, string]>(['', '', '']);
   const [layered, setLayered] = useState<[string, string, string]>(['', '', '']);
-  const [frontPx, setFrontPx] = useState<{ width: number; height: number } | null>(null);
+  const [cropPx, setCropPx] = useState<Array<{ width: number; height: number } | null>>([null, null, null]);
   const [cropBox, setCropBox] = useState<CropBox | null>(null);
   const [imageToken, setImageToken] = useState(0);
   const [layers, setLayers] = useState<Filament[]>(startingLayers);
-  const [boundaries, setBoundaries] = useState<number[]>(() => equalBoundaries(startingLayers.length));
+  const [stops, setStops] = useState<number[]>(() => evenStops(startingLayers.length, 50));
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   const [previewReady, setPreviewReady] = useState(false);
@@ -58,7 +59,7 @@ export default function Home() {
       setImage(reader.result as string);
       setImageToken((current) => current + 1);
       setCrops(['', '', '']);
-      setFrontPx(null);
+      setCropPx([null, null, null]);
       setCropBox(null);
     };
     reader.readAsDataURL(file);
@@ -78,7 +79,7 @@ export default function Home() {
       setImage(reader.result as string);
       setImageToken((current) => current + 1);
       setCrops(['', '', '']);
-      setFrontPx(null);
+      setCropPx([null, null, null]);
       setCropBox(null);
     };
     reader.readAsDataURL(blob);
@@ -93,8 +94,8 @@ export default function Home() {
     }
     const next = defaultLayerSelection(filaments);
     setLayers(next);
-    setBoundaries(equalBoundaries(next.length));
-  }, [filaments]);
+    setStops(evenStops(next.length, colorCoreLayerCount(settings)));
+  }, [filaments, settings]);
 
   useEffect(() => {
     if (step === 3) setPreviewReady(true);
@@ -107,7 +108,7 @@ export default function Home() {
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      renderLayeredCrops(crops, layers, boundaries)
+      renderLayeredCrops(crops, layers, stops, settings)
         .then((urls) => {
           if (!cancelled) setLayered(urls);
         })
@@ -119,13 +120,35 @@ export default function Home() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [crops, layers, boundaries]);
+  }, [crops, layers, stops, settings]);
 
-  const swaps = useMemo(
-    () => planLayerSwaps(layers.map((layer) => ({ name: layer.name, hex: layer.hex, td: layer.td })), settings),
-    [layers, settings],
-  );
-  const printSize = frontPx ? resolvePrintSize(frontPx.width, frontPx.height, settings) : null;
+  useEffect(() => {
+    if (!crops[0]) {
+      setCropPx([null, null, null]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(crops.map(async (src) => {
+      if (!src) return null;
+      const image = new Image();
+      image.src = src;
+      await image.decode();
+      return { width: image.naturalWidth, height: image.naturalHeight };
+    })).then((sizes) => {
+      if (!cancelled) setCropPx(sizes);
+    }).catch(() => {
+      if (!cancelled) setCropPx([null, null, null]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [crops]);
+
+  const layerCount = colorCoreLayerCount(settings);
+  const coreStops = useMemo(() => toCoreStops(layers, stops), [layers, stops]);
+  const faceSizes = cropPx.map((size) => (
+    size ? modelSizeForCrop(size.width, size.height, settings.height) : null
+  ));
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
 
   const unlocked = crops[0] ? 3 : image ? 2 : 1;
@@ -134,12 +157,12 @@ export default function Home() {
     setExporting(true);
     setExportError('');
     try {
-      const layeredNow = layered[0] ? layered : await renderLayeredCrops(crops, layers, boundaries);
+      const layeredNow = layered[0] ? layered : await renderLayeredCrops(crops, layers, stops, settings);
       await downloadPrintBundle({
         crops,
         layered: layeredNow,
         layers,
-        boundaries,
+        stops,
         settings,
         settingsSource,
       });
@@ -151,7 +174,7 @@ export default function Home() {
   };
 
   const addToCart = () => {
-    const settingsForCart: FilamentLayerSettings = { layers, boundaries };
+    const settingsForCart: FilamentLayerSettings = { layers, stops };
     addItem({
       id: 'custom-deck-box',
       name: 'Custom Deck Box',
@@ -166,7 +189,7 @@ export default function Home() {
       <div className="mx-auto w-full max-w-6xl px-4 py-4 pb-28 sm:px-8 sm:py-8">
         <header className="mb-4 text-center sm:mb-6">
           <h1 className="text-2xl font-bold tracking-wide text-[#e2c275] sm:text-4xl">Custom deck box</h1>
-          <p className="mt-1 text-sm text-gray-300">Upload art, crop the three faces, then stack the filaments.</p>
+          <p className="mt-1 text-sm text-gray-300">Upload art, crop the three faces, then set the colour core.</p>
         </header>
 
         <ol className="mb-2 grid grid-cols-3 gap-2" aria-label="Progress">
@@ -240,7 +263,7 @@ export default function Home() {
           <div>
             <h2 className="text-lg font-semibold text-[#e2c275]">Crop to the box faces</h2>
             <p className="mt-1 text-sm text-gray-300">
-              Drag the frame and the gold corners. It stays at the three-face ratio: front, spine, then back. The print file uses the front panel.
+              Drag the frame and the gold corners. It stays at the three-face ratio: front, spine, then back. Each face becomes its own colour-core STL.
             </p>
             {image ? (
               <ImageCropper
@@ -249,7 +272,6 @@ export default function Home() {
                 initialBox={cropBox}
                 onBoxChange={setCropBox}
                 setCrops={setCrops}
-                onFrontSize={setFrontPx}
               />
             ) : (
               <p className="mt-4 text-sm text-gray-400">Choose an image in step 1 first.</p>
@@ -277,30 +299,36 @@ export default function Home() {
                   ))}
                 </div>
               )}
-              {printSize && (
+              {faceSizes.some(Boolean) && (
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-                  <h2 className="text-sm font-semibold text-[#e2c275]">Size used for the STL</h2>
-                  <p className="mt-1 text-sm">
-                    Outer {formatMm(printSize.widthMm)} × {formatMm(printSize.heightMm)} mm
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Artwork opening {formatMm(printSize.innerWidthMm)} × {formatMm(printSize.innerHeightMm)} mm,
-                    frame {formatMm(printSize.insetMm)} mm.
-                    Shop maximum {formatMm(settings.width)} × {formatMm(settings.height)} mm.
+                  <h2 className="text-sm font-semibold text-[#e2c275]">One model per face</h2>
+                  <ul className="mt-1 space-y-1 text-sm">
+                    {faceSizes.map((size, index) => (
+                      <li key={FACE_NAMES[index]}>
+                        {FACE_NAMES[index]}
+                        {size ? ` ${size.widthMm.toFixed(2)} × ${size.heightMm.toFixed(2)} mm` : ' — waiting for the crop'}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Height is the shared face height ({settings.height} mm). Width follows that crop.
+                    Border {settings.borderWidth} mm wide and {settings.borderDepth} mm tall, inside the plate.
+                    Detail {settings.detailSize} mm, capped so the mesh stays in browser memory.
                   </p>
                   <p className="mt-1 text-xs text-gray-400">
-                    First layer {formatMm(settings.baseLayerHeight)} mm, then {formatMm(settings.layerHeight)} mm.
-                    Nozzle {formatMm(settings.nozzleSize)} mm.
+                    First layer {settings.baseLayerHeight} mm, then {settings.layerHeight} mm.
+                    Colour core {layerCount} layers. Min depth {settings.minDepth} mm, max depth {settings.maxDepth} mm.
                     {' '}
                     {settingsSource === 'api' ? 'Loaded from shop print settings.' : 'Built-in defaults. The shop API is not configured in this session.'}
                   </p>
                   <p className="mt-2 text-xs text-gray-400">
-                    The download is backing.stl (the first layer), relief.stl (the front-face heightmap), frame.stl (the border), details.txt with these swaps, and the six face images.
+                    The download is front.stl, spine.stl, and back.stl (each a watertight colour core), details.txt with a swap section per face, filament-layers.json, and the six face images.
                   </p>
                   <ol className="mt-3 space-y-1 text-xs text-gray-200">
-                    {swaps.map((swap) => (
-                      <li key={swap.layerNumber}>
-                        Layer {swap.layerNumber} at Z {formatMm(swap.zMm)} mm — {swap.name} ({swap.hex}), {swap.layerCount} {swap.layerCount === 1 ? 'layer' : 'layers'}
+                    <li>Start with {shortFilamentName(coreStops[0]?.filament ?? { name: 'filament', td: 0 })}</li>
+                    {coreStops.slice(0, -1).map((stop, index) => (
+                      <li key={`${stop.endLayer}-${index}`}>
+                        Layer {stop.endLayer} ({formatSwapDepth(stop.endLayer, settings)} mm) → {shortFilamentName(coreStops[index + 1].filament)}
                       </li>
                     ))}
                   </ol>
@@ -308,14 +336,16 @@ export default function Home() {
               )}
             </div>
             <div className="min-w-0">
-              <FilamentStack
+              <ColorCore
                 filaments={filaments}
                 source={source}
                 layers={layers}
-                boundaries={boundaries}
-                onChange={(nextLayers, nextBoundaries) => {
+                stops={stops}
+                layerCount={layerCount}
+                settings={settings}
+                onChange={(nextLayers, nextStops) => {
                   setLayers(nextLayers);
-                  setBoundaries(nextBoundaries);
+                  setStops(nextStops);
                 }}
               />
             </div>

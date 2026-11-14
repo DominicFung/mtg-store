@@ -45,10 +45,7 @@ export default function CartPage() {
                     <p className="text-sm text-[#e2c275]">Filament stack, bottom to top</p>
                     <ol className="mt-2 space-y-1 text-sm text-gray-200">
                       {item.filamentLayers.layers.map((layer, index) => {
-                        const min = index === 0 ? 0 : item.filamentLayers!.boundaries[index - 1];
-                        const max = index === item.filamentLayers!.layers.length - 1
-                          ? 1
-                          : item.filamentLayers!.boundaries[index];
+                        const endLayer = item.filamentLayers?.stops[index];
                         return (
                           <li key={`${item.id}-${index}`} className="flex items-center gap-2">
                             <span
@@ -58,12 +55,10 @@ export default function CartPage() {
                             <span>
                               {index + 1}. {layer.name}
                               <span className="text-gray-400">
-                                {' '}· TD {layer.td}
+                                {' '}· {layer.type ?? 'PLA'} · TD {layer.td}
                                 {layer.approximate ? ' (approx)' : ''}
                                 {layer.inStock ? '' : ' · out of stock'}
-                                {min !== undefined && max !== undefined
-                                  ? ` · luminance ${Math.round(min * 100)}–${Math.round(max * 100)}%`
-                                  : ''}
+                                {endLayer ? ` · through layer ${endLayer}` : ''}
                               </span>
                             </span>
                           </li>

@@ -4,5 +4,10 @@
   "baseLayerHeight": 0.09,
   "width": 82.44,
   "height": 105.45,
-  "nozzleSize": 0.2
+  "nozzleSize": 0.2,
+  "minDepth": 0.25,
+  "maxDepth": 2.01,
+  "borderWidth": 4,
+  "borderDepth": 3,
+  "detailSize": 0.1
 }
