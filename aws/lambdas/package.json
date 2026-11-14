@@ -4,25 +4,36 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test appsync/card/searchCardByName.test.mts appsync/printSettings/model.test.ts",
+    "test": "tsx --test appsync/card/searchCardByName.test.mts appsync/printSettings/model.test.ts orders/logic.test.ts nozzleProfiles/logic.test.ts generate/archive.test.ts",
     "seed:filaments": "node scripts/seedFilaments.mjs",
-    "seed:print-settings": "node scripts/seedPrintSettings.mjs"
+    "seed:print-settings": "node scripts/seedPrintSettings.mjs",
+    "seed:nozzle-profiles": "node scripts/seedNozzleProfiles.mjs"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/aws-lambda": "^8.10.109",
     "@types/node": "^18.7.6",
-    "aws-lambda": "^1.0.7"
+    "@types/pngjs": "^6.0.5",
+    "aws-lambda": "^1.0.7",
+    "tsx": "^4.23.15"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1169.0",
     "@aws-sdk/client-dynamodb": "^3.335.0",
     "@aws-sdk/client-lambda": "^3.245.0",
+    "@aws-sdk/client-s3": "^3.1169.0",
     "@aws-sdk/client-ses": "^3.370.0",
+    "@aws-sdk/client-sns": "^3.1169.0",
+    "@aws-sdk/client-sqs": "^3.1169.0",
     "@aws-sdk/lib-dynamodb": "^3.335.0",
+    "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "@aws-sdk/util-dynamodb": "^3.335.0",
     "@aws-sdk/util-utf8-node": "^3.208.0",
     "fuse.js": "^7.1.0",
+    "jpeg-js": "^0.4.4",
+    "jszip": "^3.10.2",
+    "pngjs": "^7.0.0",
     "util": "^0.12.5",
     "uuid": "^9.0.0"
   }

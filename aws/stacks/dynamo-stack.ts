@@ -100,5 +100,67 @@ export class DynamoStack extends Stack {
       value: printSettingsTable.tableArn,
       exportName: `${props.name}-PrintSettingsTable-Arn`
     })
+
+    // Deck-box orders. Retained. The sort keys are ISO timestamps.
+    const ordersTable = new Table(this, 'OrdersTable', {
+      partitionKey: { name: 'orderId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      tableName: `${props.name}-OrdersTable`,
+      removalPolicy: RemovalPolicy.RETAIN,
+      pointInTimeRecovery: true,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: 'orderNumber',
+      partitionKey: { name: 'orderNumber', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: 'email-createdAt',
+      partitionKey: { name: 'email', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: 'shop-createdAt',
+      partitionKey: { name: 'shop', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: 'status-createdAt',
+      partitionKey: { name: 'status', type: AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+    ordersTable.addGlobalSecondaryIndex({
+      indexName: 'clientRequestId',
+      partitionKey: { name: 'clientRequestId', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
+    });
+
+    new CfnOutput(this, `${props.name}-OrdersTable-Name`, {
+      value: ordersTable.tableName,
+      exportName: `${props.name}-OrdersTable-Name`,
+    });
+    new CfnOutput(this, `${props.name}-OrdersTable-Arn`, {
+      value: ordersTable.tableArn,
+      exportName: `${props.name}-OrdersTable-Arn`,
+    });
+
+    const nozzleProfilesTable = new Table(this, 'NozzleProfilesTable', {
+      partitionKey: { name: 'profileId', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      tableName: `${props.name}-NozzleProfilesTable`,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    new CfnOutput(this, `${props.name}-NozzleProfilesTable-Name`, {
+      value: nozzleProfilesTable.tableName,
+      exportName: `${props.name}-NozzleProfilesTable-Name`,
+    });
+    new CfnOutput(this, `${props.name}-NozzleProfilesTable-Arn`, {
+      value: nozzleProfilesTable.tableArn,
+      exportName: `${props.name}-NozzleProfilesTable-Arn`,
+    });
   }
 }

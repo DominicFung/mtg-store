@@ -3,12 +3,17 @@ import { App, CfnDeletionPolicy, CfnOutput, Duration, Fn, Stack } from 'aws-cdk-
 import { CfnApiKey } from 'aws-cdk-lib/aws-appsync'
 import { AmplifyGraphqlApi, AmplifyGraphqlDefinition } from '@aws-amplify/graphql-api-construct'
 import { ManagedPolicy, Policy, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam'
+import { UserPool } from 'aws-cdk-lib/aws-cognito'
 import { Runtime } from 'aws-cdk-lib/aws-lambda'
 import { NodejsFunction, NodejsFunctionProps } from 'aws-cdk-lib/aws-lambda-nodejs'
 import path, { join } from 'path'
 
 interface AppsyncProps {
   name: string
+  notifyEmail: string
+  customerStatusEmails: boolean
+  /** Bedrock model or inference-profile id. us.* profiles need the profile ARN. */
+  bedrockImageModel: string
 }
 
 export class AppsyncStack extends Stack {
@@ -24,11 +29,15 @@ export class AppsyncStack extends Stack {
     const filamentDynamoName = Fn.importValue(`${props.name}-FilamentTable-Name`)
     const filamentDynamoArn = Fn.importValue(`${props.name}-FilamentTable-Arn`)
 
+    const adminPool = UserPool.fromUserPoolId(this, 'AdminPool', Fn.importValue(`${props.name}-UserPoolId`))
+
     const appsync = new AmplifyGraphqlApi(this, `${props.name}-Appsync`, {
       apiName: `${props.name}`,
       definition: AmplifyGraphqlDefinition.fromFiles(path.join(__dirname, "../", 'schema.graphql')),
       authorizationModes: {
-        apiKeyConfig: { expires: Duration.days(365) }
+        defaultAuthorizationMode: 'API_KEY',
+        apiKeyConfig: { expires: Duration.days(365) },
+        userPoolConfig: { userPool: adminPool },
       }
     })
 
@@ -52,14 +61,12 @@ export class AppsyncStack extends Stack {
     if (!apiScope) {
       throw new Error('Default API key has no parent scope')
     }
-    const hourSeconds = 60 * 60
-    const synthHour = Math.floor(Date.now() / 1000 / hourSeconds) * hourSeconds
-    // 365 days is the AppSync maximum, measured from deploy time. Stamp expiry one hour
-    // under 365 days from the synth hour so a deploy shortly after synth is accepted.
+    // Fixed epoch so CloudFormation does not replace the key on every deploy.
+    // 1826204400 is within AppSync's 365-day maximum from the key's creation.
     const shopKey = new CfnApiKey(apiScope, 'ShopApiKey20261112', {
       apiId: appsync.apiId,
       description: 'Storefront API key. Rotate before it expires (365 day AppSync maximum).',
-      expires: synthHour + (365 * 24 * hourSeconds) - hourSeconds,
+      expires: 1826204400,
     })
 
     const amplifyKeyOutput = this.node.tryFindChild('awsAppsyncApiKey') as CfnOutput | undefined
@@ -200,5 +207,126 @@ export class AppsyncStack extends Stack {
       typeName: 'Mutation',
       fieldName: 'updatePrintSettings',
     })
+
+    const ordersTableName = Fn.importValue(`${props.name}-OrdersTable-Name`)
+    const ordersTableArn = Fn.importValue(`${props.name}-OrdersTable-Arn`)
+    const nozzleTableName = Fn.importValue(`${props.name}-NozzleProfilesTable-Name`)
+    const nozzleTableArn = Fn.importValue(`${props.name}-NozzleProfilesTable-Arn`)
+    const orderBucketName = Fn.importValue(`${props.name}-OrderBucketName`)
+    const orderBucketArn = Fn.importValue(`${props.name}-OrderBucketArn`)
+    const orderQueueUrl = Fn.importValue(`${props.name}-OrderQueueUrl`)
+    const orderQueueArn = Fn.importValue(`${props.name}-OrderQueueArn`)
+    const notifyTopicArn = Fn.importValue(`${props.name}-NotifyTopicArn`)
+
+    const orderRole = new Role(this, `${props.name}-OrderLambdaRole`, {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+    })
+    orderRole.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'))
+    orderRole.addToPolicy(new PolicyStatement({
+      actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:Query', 'dynamodb:Scan'],
+      resources: [
+        ordersTableArn, `${ordersTableArn}/index/*`,
+        nozzleTableArn,
+        filamentDynamoArn,
+        printSettingsDynamoArn,
+      ],
+    }))
+    orderRole.addToPolicy(new PolicyStatement({
+      actions: ['s3:GetObject', 's3:PutObject'],
+      resources: [`${orderBucketArn}/*`],
+    }))
+    orderRole.addToPolicy(new PolicyStatement({
+      actions: ['sqs:SendMessage'],
+      resources: [orderQueueArn],
+    }))
+    orderRole.addToPolicy(new PolicyStatement({
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'],
+    }))
+    orderRole.addToPolicy(new PolicyStatement({
+      actions: ['sns:Publish'],
+      resources: [notifyTopicArn],
+    }))
+
+    const orderEnvironment = {
+      ORDERS_TABLE_NAME: ordersTableName,
+      NOZZLE_PROFILES_TABLE_NAME: nozzleTableName,
+      FILAMENT_TABLE_NAME: filamentDynamoName,
+      PRINT_SETTINGS_TABLE_NAME: printSettingsDynamoName,
+      ORDER_BUCKET_NAME: orderBucketName,
+      ORDER_QUEUE_URL: orderQueueUrl,
+      NOTIFY_EMAIL: props.notifyEmail,
+      NOTIFY_TOPIC_ARN: notifyTopicArn,
+      CUSTOMER_STATUS_EMAILS: props.customerStatusEmails ? 'true' : 'false',
+      PRESIGN_TTL_SECONDS: String(4 * 60 * 60),
+    }
+    const orderFunction = (id: string, entry: string, fieldName: string, typeName: 'Query' | 'Mutation') => {
+      const fn = new NodejsFunction(this, `${props.name}-${id}`, {
+        entry: join(__dirname, '../lambdas', entry),
+        timeout: Duration.seconds(30),
+        role: orderRole,
+        bundling: { bundleAwsSDK: true },
+        depsLockFilePath: join(__dirname, '../lambdas', 'package-lock.json'),
+        environment: orderEnvironment,
+        runtime: Runtime.NODEJS_22_X,
+      })
+      appsync.addLambdaDataSource(`${props.name}${id}DS`, fn)
+        .createResolver(`${props.name}-${id}Resolver`, { typeName, fieldName })
+    }
+
+    orderFunction('SubmitOrder', 'appsync/orders/submitOrder.ts', 'submitOrder', 'Mutation')
+    orderFunction('ConfirmOrder', 'appsync/orders/confirmOrder.ts', 'confirmOrder', 'Mutation')
+    orderFunction('TrackOrder', 'appsync/orders/trackOrder.ts', 'trackOrder', 'Query')
+    orderFunction('ListOrders', 'appsync/orders/adminOrders.ts', 'listOrders', 'Query')
+    orderFunction('GetAdminOrder', 'appsync/orders/adminOrders.ts', 'getAdminOrder', 'Query')
+    orderFunction('UpdateOrderStatus', 'appsync/orders/adminOrders.ts', 'updateOrderStatus', 'Mutation')
+    orderFunction('RetryOrder', 'appsync/orders/adminOrders.ts', 'retryOrderGeneration', 'Mutation')
+    orderFunction('RefreshDownloads', 'appsync/orders/adminOrders.ts', 'refreshDownloadLinks', 'Mutation')
+    orderFunction('ListActiveProfiles', 'appsync/nozzleProfiles/profiles.ts', 'listActiveNozzleProfiles', 'Query')
+    orderFunction('ListProfiles', 'appsync/nozzleProfiles/profiles.ts', 'listNozzleProfiles', 'Query')
+    orderFunction('UpsertProfile', 'appsync/nozzleProfiles/profiles.ts', 'upsertNozzleProfile', 'Mutation')
+    orderFunction('DeactivateProfile', 'appsync/nozzleProfiles/profiles.ts', 'deactivateNozzleProfile', 'Mutation')
+
+    const outpaint = new NodejsFunction(this, `${props.name}-OutpaintArt`, {
+      entry: join(__dirname, '../lambdas', 'outpaint', 'handler.ts'),
+      timeout: Duration.seconds(60),
+      memorySize: 1024,
+      role: orderRole,
+      bundling: { bundleAwsSDK: true },
+      depsLockFilePath: join(__dirname, '../lambdas', 'package-lock.json'),
+      environment: {
+        ...orderEnvironment,
+        BEDROCK_IMAGE_MODEL: props.bedrockImageModel,
+      },
+      runtime: Runtime.NODEJS_22_X,
+    })
+    outpaint.addToRolePolicy(new PolicyStatement({
+      actions: ['bedrock:InvokeModel'],
+      resources: bedrockInvokeResources(this.region, this.account, props.bedrockImageModel),
+    }))
+    appsync.addLambdaDataSource(`${props.name}OutpaintDS`, outpaint)
+      .createResolver(`${props.name}-OutpaintResolver`, { typeName: 'Query', fieldName: 'outpaintCommanderArt' })
   }
+}
+
+/**
+ * InvokeModel on a geo profile also needs the foundation model in each
+ * destination region. us.stability.stable-outpaint-v1:0 routes across
+ * us-east-1, us-east-2, and us-west-2.
+ */
+function bedrockInvokeResources(region: string, account: string, modelId: string): string[] {
+  const geo = /^(us|eu|apac|global)\./.exec(modelId)
+  if (!geo) {
+    return [`arn:aws:bedrock:${region}::foundation-model/${modelId}`]
+  }
+  const foundationId = modelId.slice(geo[0].length)
+  const destinations = geo[1] === 'us'
+    ? ['us-east-1', 'us-east-2', 'us-west-2']
+    : geo[1] === 'eu'
+      ? ['eu-central-1', 'eu-west-1', 'eu-west-3']
+      : [region]
+  return [
+    `arn:aws:bedrock:${region}:${account}:inference-profile/${modelId}`,
+    ...destinations.map((destination) => `arn:aws:bedrock:${destination}::foundation-model/${foundationId}`),
+  ]
 }

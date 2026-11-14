@@ -8,8 +8,8 @@ import ProductCard from './productCard';
 
 const products = [
   {
-    name: 'Custom Deck Box',
-    description: 'Upload your art, stack filament colours, and preview the printed box.',
+    name: 'Commander Deck Box',
+    description: 'Search your commander, crop the faces, and place an order. We print the box.',
     link: '/box',
     images: [
       '/images/1F382F41-E88E-4192-815E-756C3A653F2D_1_105_c.jpeg', 

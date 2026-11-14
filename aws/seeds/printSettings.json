@@ -7,7 +7,7 @@
   "nozzleSize": 0.2,
   "minDepth": 0.25,
   "maxDepth": 2.01,
-  "borderWidth": 4,
-  "borderDepth": 3,
+  "borderWidth": 0,
+  "borderDepth": 0,
   "detailSize": 0.1
 }

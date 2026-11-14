@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { DEFAULT_PRINT_SETTINGS, PrintSettings } from './printGeometry';
+import { publicConfig } from './publicConfig';
 
 const GET_PRINT_SETTINGS = `query GetPrintSettings {
   getPrintSettings {
@@ -61,8 +62,8 @@ export function normalizePrintSettings(row: unknown): PrintSettings | null {
 }
 
 async function queryPrintSettings(query: string): Promise<PrintSettings | null> {
-  const url = process.env.NEXT_PUBLIC_APPSYNC_URL;
-  const apiKey = process.env.NEXT_PUBLIC_APPSYNC_API_KEY;
+  const url = publicConfig.appsyncUrl;
+  const apiKey = publicConfig.appsyncApiKey;
   if (!url || !apiKey) return null;
   const response = await fetch(url, {
     method: 'POST',
@@ -79,8 +80,8 @@ async function queryPrintSettings(query: string): Promise<PrintSettings | null> 
 }
 
 export async function fetchPrintSettings(): Promise<{ settings: PrintSettings; source: PrintSettingsSource }> {
-  const url = process.env.NEXT_PUBLIC_APPSYNC_URL;
-  const apiKey = process.env.NEXT_PUBLIC_APPSYNC_API_KEY;
+  const url = publicConfig.appsyncUrl;
+  const apiKey = publicConfig.appsyncApiKey;
   if (!url || !apiKey) return { settings: DEFAULT_PRINT_SETTINGS, source: 'defaults' };
 
   try {

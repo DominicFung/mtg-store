@@ -7,8 +7,8 @@ export const DEFAULT_PRINT_SETTINGS = {
   nozzleSize: 0.2,
   minDepth: 0.25,
   maxDepth: 2.01,
-  borderWidth: 4,
-  borderDepth: 3,
+  borderWidth: 0,
+  borderDepth: 0,
   detailSize: 0.1,
 };
 
@@ -38,7 +38,7 @@ const OPTIONAL = {
   minDepth: [0.01, 20],
   maxDepth: [0.02, 40],
   borderWidth: [0, 40],
-  borderDepth: [0.01, 40],
+  borderDepth: [0, 40],
   detailSize: [0.02, 2],
 } as const;
 

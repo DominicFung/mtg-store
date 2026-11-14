@@ -9,6 +9,9 @@ export default function AppBar() {
   return (
     <header className="bg-[#1a1a2e] text-white shadow-md p-4 flex justify-between items-center">
       <Link href="/" className="text-2xl font-bold text-[#e2c275]">The Mana Ramp</Link>
+      <nav className="flex items-center gap-4 text-sm">
+        <Link href="/track" className="min-h-11 inline-flex items-center">Track</Link>
+        <Link href="/admin" className="min-h-11 inline-flex items-center text-[#e2c275]">Admin</Link>
       <Link href="/cart" className="relative">
         <ShoppingCart className="w-6 h-6" />
         {items.length > 0 && (
@@ -17,6 +20,7 @@ export default function AppBar() {
           </span>
         )}
       </Link>
+      </nav>
     </header>
   );
 }

@@ -51,12 +51,206 @@ input UpdatePrintSettingsInput {
   detailSize: Float
 }
 
+# Nozzle profiles are configurable without a deploy. layerCount is derived.
+# Writes are admin-only. Customers can read the active profiles.
+type NozzleProfile {
+  id: ID!
+  name: String!
+  nozzleSize: Float!
+  layerHeight: Float!
+  baseLayerHeight: Float!
+  detailSize: Float!
+  minDepth: Float!
+  maxDepth: Float!
+  borderWidth: Float!
+  borderDepth: Float!
+  brightnessAdjust: Float!
+  maxWidth: Float!
+  maxHeight: Float!
+  nominalWidth: Float!
+  active: Boolean!
+  isDefault: Boolean!
+  layerCount: Int!
+  layersAtMaxDepth: Int!
+  coreTopMm: Float!
+}
+
+input UpsertNozzleProfileInput {
+  id: ID
+  name: String!
+  nozzleSize: Float!
+  layerHeight: Float!
+  baseLayerHeight: Float!
+  detailSize: Float!
+  minDepth: Float!
+  maxDepth: Float!
+  borderWidth: Float!
+  borderDepth: Float!
+  brightnessAdjust: Float!
+  maxWidth: Float!
+  maxHeight: Float!
+  nominalWidth: Float!
+  active: Boolean!
+  isDefault: Boolean!
+}
+
+type OrderStop {
+  filamentId: String!
+  name: String!
+  hex: String!
+  td: Float!
+  type: String
+  brand: String
+  endLayer: Int!
+  depthMm: Float!
+}
+
+type OrderHistoryEntry {
+  status: String!
+  at: String!
+  actor: String!
+  note: String
+}
+
+type OrderSummary {
+  orderId: ID!
+  orderNumber: String!
+  email: String!
+  name: String!
+  status: String!
+  createdAt: String!
+  updatedAt: String!
+  priceLabel: String!
+  paymentStatus: String!
+  profileName: String!
+  nozzleSize: Float!
+  layerCount: Int!
+  errorMessage: String
+  carrier: String
+  trackingNumber: String
+  note: String
+  addressLine1: String
+  city: String
+  region: String
+  postalCode: String
+  country: String
+}
+
+type OrderDetail {
+  orderId: ID!
+  orderNumber: String!
+  email: String!
+  name: String!
+  status: String!
+  createdAt: String!
+  updatedAt: String!
+  priceLabel: String!
+  paymentStatus: String!
+  profileName: String!
+  nozzleSize: Float!
+  layerCount: Int!
+  errorMessage: String
+  carrier: String
+  trackingNumber: String
+  note: String
+  addressLine1: String
+  city: String
+  region: String
+  postalCode: String
+  country: String
+  history: [OrderHistoryEntry!]!
+  stops: [OrderStop!]!
+  previewUrls: [String!]!
+  downloadUrl: String
+  downloadExpiresAt: String
+  profileSnapshotJson: String
+}
+
+type PresignedUpload {
+  purpose: String!
+  url: String!
+  headersJson: String!
+}
+
+type SubmitOrderResult {
+  orderId: ID!
+  orderNumber: String!
+  email: String!
+  name: String!
+  status: String!
+  createdAt: String!
+  updatedAt: String!
+  priceLabel: String!
+  paymentStatus: String!
+  profileName: String!
+  nozzleSize: Float!
+  layerCount: Int!
+  errorMessage: String
+  carrier: String
+  trackingNumber: String
+  note: String
+  addressLine1: String
+  city: String
+  region: String
+  postalCode: String
+  country: String
+  uploads: [PresignedUpload!]!
+}
+
+input OrderStopInput {
+  filamentId: String!
+  endLayer: Int!
+}
+
+input UploadSlotInput {
+  width: Int!
+  height: Int!
+  byteLength: Int!
+}
+
+input SubmitOrderInput {
+  clientRequestId: String!
+  email: String!
+  name: String!
+  profileId: String!
+  note: String
+  addressLine1: String
+  city: String
+  region: String
+  postalCode: String
+  country: String
+  stops: [OrderStopInput!]!
+  crops: [UploadSlotInput!]!
+  previews: [UploadSlotInput!]!
+}
+
+type OutpaintResult {
+  imageUrl: String!
+  source: String!
+  width: Int!
+  height: Int!
+}
+
 type Query {
   searchCardByName(name: String!): [Card]
   listFilaments: [Filament]
   getPrintSettings: PrintSettings
+  listActiveNozzleProfiles: [NozzleProfile!]!
+  # Admin. API keys cannot call this.
+  listNozzleProfiles: [NozzleProfile!]! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  listOrders(status: String, email: String, limit: Int): [OrderSummary!]! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  getAdminOrder(orderId: ID!): OrderDetail! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  trackOrder(orderNumber: String!, email: String!): OrderDetail!
+  outpaintCommanderArt(imageUrl: String!): OutpaintResult!
 }
 
 type Mutation {
-  updatePrintSettings(input: UpdatePrintSettingsInput!): PrintSettings
+  updatePrintSettings(input: UpdatePrintSettingsInput!): PrintSettings @aws_cognito_user_pools(cognito_groups: ["admin"])
+  submitOrder(input: SubmitOrderInput!): SubmitOrderResult!
+  confirmOrder(orderNumber: String!, email: String!): OrderSummary!
+  updateOrderStatus(orderId: ID!, nextStatus: String!, carrier: String, trackingNumber: String, note: String): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  retryOrderGeneration(orderId: ID!): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  refreshDownloadLinks(orderId: ID!): OrderDetail! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  upsertNozzleProfile(input: UpsertNozzleProfileInput!): NozzleProfile! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  deactivateNozzleProfile(id: ID!): NozzleProfile! @aws_cognito_user_pools(cognito_groups: ["admin"])
 }

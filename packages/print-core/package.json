@@ -1,0 +1,10 @@
+{
+  "name": "@mtg/print-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HueForge colour-core mesh shared by the shop preview and the print generator.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
