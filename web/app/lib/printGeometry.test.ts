@@ -219,8 +219,8 @@ test('density 10 reaches the Brigid ice-blue slider; density 1 does not', () => 
 });
 
 test('a bright pixel is a taller layer than a dark pixel, and both sit on a layer top', () => {
-  const dark = layerForLuminance(0, 5, 50, 1);
-  const bright = layerForLuminance(1, 5, 50, 1);
+  const dark = layerForLuminance(0, 5, 50);
+  const bright = layerForLuminance(1, 5, 50);
   assert.equal(dark, 5);
   assert.equal(bright, 50);
   assert.ok(layerTopMm(bright, settings) > layerTopMm(dark, settings));
@@ -242,61 +242,64 @@ test('stops can be inserted, dragged, and removed without leaving the core', () 
   assert.equal(removed.length, moved.length - 1);
 });
 
-test('the STL is one watertight solid the size of the plate, with the border as the tallest part', () => {
-  const width = 4;
-  const height = 4;
-  const luma = new Float32Array([1, 1, 0, 0]);
+test('the STL matches HueForge structure: centred plate, flat back, lip on the positive edges', () => {
+  const cols = 4;
+  const rows = 4;
+  const unit = new Float32Array([
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    1, 1, 1, 1,
+    1, 1, 1, 1,
+  ]);
   const heights = buildVertexHeights({
-    widthMm: 20,
-    heightMm: 24,
-    cols: width,
-    rows: height,
-    borderWidthMm: 4,
-    borderDepthMm: 3,
-    luma,
-    lumaCols: 2,
-    lumaRows: 2,
-    settings,
-    maxLayer: 50,
+    cols,
+    rows,
+    unit,
+    minDepth: 0.25,
+    actualDepth: 2.05,
+    lipMm: 0.04,
   });
-  assert.equal(heights[0], 3);
-  assert.equal(heights[heights.length - 1], 3);
-  const inner = heights[2 * (width + 1) + 2];
-  assert.ok(inner >= 0.25 - 1e-6 && inner <= 2.05 + 1e-6, `inner height ${inner}`);
-  assert.ok(inner < 3);
+  nearly(heights[0], 0.25, 1e-5);
+  nearly(heights[3], 0.25, 1e-5);
+  nearly(heights[2 * 5 + 1], 2.05, 1e-5);
+  nearly(heights[3 * 5 + 1], 2.05, 1e-5);
+  nearly(heights[4], 0.04, 1e-6);
+  nearly(heights[heights.length - 1], 0.04, 1e-6);
 
-  const stl = encodeHeightfieldStl({ cols: width, rows: height, widthMm: 20, heightMm: 24, heights });
-  assert.equal(stl.byteLength, 84 + meshTriangleCount(width, height) * 50);
+  const stl = encodeHeightfieldStl({ cols, rows, widthMm: 0.4, heightMm: 0.4, heights });
+  assert.equal(stl.byteLength, 84 + meshTriangleCount(cols, rows) * 50);
   const triangles = decodeBinaryStl(stl);
   const bounds = triangleBounds(triangles);
-  nearly(bounds.min[0], 0);
-  nearly(bounds.min[1], 0);
-  nearly(bounds.min[2], 0);
-  nearly(bounds.max[0], 20);
-  nearly(bounds.max[1], 24);
-  nearly(bounds.max[2], 3, 1e-4);
-
+  nearly(bounds.min[0], -0.2);
+  nearly(bounds.max[0], 0.2);
+  nearly(bounds.min[1], -0.2);
+  nearly(bounds.max[1], 0.2);
+  nearly(bounds.min[2], 0, 1e-5);
+  nearly(bounds.max[2], 2.05, 1e-4);
   assert.equal(pairedEdges(triangles), true);
   assert.ok(signedVolume(triangles) > 0, 'winding should face outward');
-
-  const highY = triangles.flatMap((triangle) => triangle.verts)
-    .filter((vertex) => vertex[1] > 16 && vertex[0] > 6 && vertex[0] < 14 && vertex[2] < 2.9 && vertex[2] > 0.05);
-  const lowY = triangles.flatMap((triangle) => triangle.verts)
-    .filter((vertex) => vertex[1] < 8 && vertex[0] > 6 && vertex[0] < 14 && vertex[2] < 2.9 && vertex[2] > 0.05);
-  const highZ = Math.max(...highY.map((vertex) => vertex[2]));
-  const lowZ = Math.max(...lowY.map((vertex) => vertex[2]));
-  assert.ok(highZ > lowZ, `image top should be taller (${highZ} vs ${lowZ})`);
+  const back = triangles.filter((triangle) => triangle.verts.every((vertex) => Math.abs(vertex[2]) < 1e-6));
+  assert.equal(back.length, 2 * (cols + rows));
 });
 
-test('detail size is honoured until the triangle cap pulls the grid apart', () => {
+test('detail size rounds the plate onto the 0.10 mm lattice HueForge exports', () => {
   const fine = meshGrid(94.67, 105.45, 0.1, 50_000_000);
-  assert.ok(Math.abs(fine.stepMm - 0.1) < 0.02, `step ${fine.stepMm}`);
+  assert.equal(fine.cols, 947);
+  assert.equal(fine.rows, 1055);
+  assert.equal(fine.widthMm, 94.7);
+  assert.equal(fine.heightMm, 105.5);
+  assert.equal(fine.triangles, 2010182);
+  const back = meshGrid(82.44, 105.45, 0.1, 50_000_000);
+  assert.equal(back.cols, 824);
+  assert.equal(back.rows, 1055);
+  assert.equal(back.triangles, 1749914);
   const capped = meshGrid(94.67, 105.45, 0.1, 180_000);
   assert.ok(capped.triangles <= 180_000);
   assert.ok(capped.stepMm > 0.1);
+  assert.equal(capped.widthMm, 94.7);
 });
 
-test('a real-sized face mesh stays inside the plate and reaches the border depth', () => {
+test('a real-sized face mesh is centred, flat on the back, and stops at actual depth', () => {
   const width = 32;
   const height = 36;
   const rgba = new Uint8ClampedArray(width * height * 4);
@@ -320,15 +323,20 @@ test('a real-sized face mesh stays inside the plate and reaches the border depth
     maxTriangles: 8_000,
     header: 'test',
   });
-  const expected = modelSizeForCrop(width, height, printSettings.height);
-  assert.equal(mesh.widthMm, expected.widthMm);
-  assert.equal(mesh.heightMm, expected.heightMm);
+  const plate = meshGrid(
+    modelSizeForCrop(width, height, printSettings.height).widthMm,
+    printSettings.height,
+    printSettings.detailSize,
+    8_000,
+  );
+  assert.equal(mesh.widthMm, plate.widthMm);
+  assert.equal(mesh.heightMm, plate.heightMm);
   const decoded = decodeBinaryStl(mesh.stl);
   const bounds = triangleBounds(decoded);
-  nearly(bounds.max[0], expected.widthMm, 0.02);
-  nearly(bounds.max[1], expected.heightMm, 0.02);
+  nearly(bounds.min[0], -plate.widthMm / 2, 0.02);
+  nearly(bounds.max[0], plate.widthMm / 2, 0.02);
   nearly(bounds.min[2], 0, 1e-4);
-  nearly(bounds.max[2], printSettings.borderDepth, 0.02);
+  nearly(bounds.max[2], 2.05, 0.05);
   assert.equal(decoded.length, mesh.triangles);
   assert.ok(mesh.triangles <= 8_000);
 });

@@ -132,7 +132,7 @@ export async function buildPrintBundle(input: BundleInput): Promise<JSZip> {
       density: TRANSMISSION_DENSITY,
       meaning: 'TD is the thickness that would block 95% of the light. density 10 matches the Brigid colour core; density 1 is the wiki curve and stays too transparent for these stacks.',
     },
-    luminance: 'Combo at weight 1 (standard Rec. 709), then a 1.6 gamma so midtones sit lower in the core. Brighter pixels are taller. Heights snap to layer tops between min depth and the top stop.',
+    luminance: 'Standard BT.601 luminance, one 3x3 smooth, stretched from the image black to white onto min depth .. actual depth. Heights are continuous, not snapped to layers. The +X and +Y edges are a one-cell lip at layer height and the back is flat at Z 0.',
     print: {
       layerHeightMm: input.settings.layerHeight,
       baseLayerHeightMm: input.settings.baseLayerHeight,

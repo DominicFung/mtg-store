@@ -311,9 +311,8 @@ export default function Home() {
                     ))}
                   </ul>
                   <p className="mt-1 text-xs text-gray-400">
-                    Height is the shared face height ({settings.height} mm). Width follows that crop.
-                    Border {settings.borderWidth} mm wide and {settings.borderDepth} mm tall, inside the plate.
-                    Detail {settings.detailSize} mm, capped so the mesh stays in browser memory.
+                    Height is the shared face height ({settings.height} mm). Width follows that crop, then both snap to the {settings.detailSize} mm grid.
+                    The mesh is centred, the back is flat, and the far edges drop to one layer. The download caps the triangle count so a phone can build it.
                   </p>
                   <p className="mt-1 text-xs text-gray-400">
                     First layer {settings.baseLayerHeight} mm, then {settings.layerHeight} mm.

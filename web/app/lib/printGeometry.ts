@@ -1,13 +1,11 @@
 import {
   bilinear,
+  binomialSmooth,
   colorCoreLayerCount,
-  layerForLuminance,
+  heightForUnitLuminance,
   layerTopMm,
   luminanceFromRgba,
-  minBlendLayer,
-  mmToUm,
-  smoothLuminance,
-  smoothingRadiusPx,
+  stretchToUnit,
   type CoreStop,
   type LayerSettings,
 } from './hueforge';
@@ -15,12 +13,11 @@ import {
 /**
  * One HueForge colour-core solid per deck-box face.
  *
- * X is width, Y is face height, Z is up. The origin is the front-left corner
- * on the bed. The top of the artwork is at maximum Y. The outer footprint
- * follows the crop's pixel aspect at the shared face height. A border of
- * `borderWidth` sits inside that footprint and is raised to `borderDepth`.
- * The opening is a luminance heightmap: brighter pixels are taller, between
- * Min Depth and the top slider, snapped to layer tops.
+ * The mesh is centred on the origin. X is width, Y is face height, Z is up,
+ * and the top of the artwork is at maximum Y. The footprint is the crop size
+ * rounded to the detail grid. Heights are continuous from Min Depth to the
+ * top slider. The +X and +Y edges drop to one layer height, the back is a
+ * flat fan at Z = 0, and the outer wall closes that lip.
  */
 
 export type PrintSettings = LayerSettings & {
@@ -82,8 +79,9 @@ export function modelSizeForCrop(
   };
 }
 
+/** Top grid + one quad per perimeter edge + one triangle per edge for the flat back. */
 export function meshTriangleCount(cols: number, rows: number): number {
-  return 4 * cols * rows + 4 * (cols + rows);
+  return 2 * cols * rows + 6 * (cols + rows);
 }
 
 export function meshGrid(
@@ -91,19 +89,28 @@ export function meshGrid(
   heightMm: number,
   detailMm: number,
   maxTriangles = MAX_MESH_TRIANGLES,
-): { cols: number; rows: number; stepMm: number; triangles: number } {
-  const detail = Math.min(Math.max(detailMm, 0.05), Math.max(widthMm, heightMm));
-  let step = detail;
-  let cols = Math.max(1, Math.round(widthMm / step));
-  let rows = Math.max(1, Math.round(heightMm / step));
+): { cols: number; rows: number; widthMm: number; heightMm: number; stepMm: number; triangles: number } {
+  const detail = Math.max(detailMm, 0.05);
+  const fullCols = Math.max(1, Math.round(widthMm / detail));
+  const fullRows = Math.max(1, Math.round(heightMm / detail));
+  const plateWidth = fullCols * detail;
+  const plateHeight = fullRows * detail;
+  let cols = fullCols;
+  let rows = fullRows;
   let guard = 0;
-  while (meshTriangleCount(cols, rows) > maxTriangles && guard < 48) {
-    step *= 1.12;
-    cols = Math.max(2, Math.round(widthMm / step));
-    rows = Math.max(2, Math.round(heightMm / step));
+  while (meshTriangleCount(cols, rows) > maxTriangles && guard < 32) {
+    cols = Math.max(8, Math.round(cols * 0.85));
+    rows = Math.max(8, Math.round(rows * 0.85));
     guard += 1;
   }
-  return { cols, rows, stepMm: widthMm / cols, triangles: meshTriangleCount(cols, rows) };
+  return {
+    cols,
+    rows,
+    widthMm: plateWidth,
+    heightMm: plateHeight,
+    stepMm: plateWidth / cols,
+    triangles: meshTriangleCount(cols, rows),
+  };
 }
 
 export type Vec3 = [number, number, number];
@@ -242,7 +249,10 @@ function writeNormal(view: DataView, offset: number, ax: number, ay: number, az:
   return offset + 50;
 }
 
-/** Binary STL of a solid heightfield. Top, bottom, and the four outer walls. */
+/**
+ * Solid colour core. The top is the heightfield, the +X/+Y lip included.
+ * The back is one triangle per perimeter edge, fanned from the centre at Z = 0.
+ */
 export function encodeHeightfieldStl(field: HeightField): Uint8Array {
   const { cols, rows, widthMm, heightMm, heights } = field;
   const expected = (cols + 1) * (rows + 1);
@@ -255,11 +265,11 @@ export function encodeHeightfieldStl(field: HeightField): Uint8Array {
   const count = meshTriangleCount(cols, rows);
   const bytes = new Uint8Array(84 + count * 50);
   const view = new DataView(bytes.buffer);
-  bytes.set(new TextEncoder().encode(field.header ?? 'HueForge colour core').subarray(0, 80), 0);
+  bytes.set(new TextEncoder().encode(field.header ?? 'HueForge').subarray(0, 80), 0);
   view.setUint32(80, count, true);
   let offset = 84;
-  const xAt = (i: number) => (i / cols) * widthMm;
-  const yAt = (j: number) => (j / rows) * heightMm;
+  const xAt = (i: number) => -widthMm / 2 + (i / cols) * widthMm;
+  const yAt = (j: number) => -heightMm / 2 + (j / rows) * heightMm;
   const zAt = (i: number, j: number) => heights[j * (cols + 1) + i];
   const tri = (
     ax: number, ay: number, az: number,
@@ -285,12 +295,6 @@ export function encodeHeightfieldStl(field: HeightField): Uint8Array {
         xAt(i + 1), yAt(j), zAt(i + 1, j),
         xAt(i + 1), yAt(j + 1), zAt(i + 1, j + 1),
         xAt(i), yAt(j + 1), zAt(i, j + 1),
-      );
-      quad(
-        xAt(i), yAt(j + 1), 0,
-        xAt(i + 1), yAt(j + 1), 0,
-        xAt(i + 1), yAt(j), 0,
-        xAt(i), yAt(j), 0,
       );
     }
   }
@@ -322,43 +326,40 @@ export function encodeHeightfieldStl(field: HeightField): Uint8Array {
       xAt(i + 1), yAt(rows), 0,
     );
   }
+
+  const loop: Array<[number, number]> = [];
+  for (let j = 0; j <= rows; j += 1) loop.push([0, j]);
+  for (let i = 1; i <= cols; i += 1) loop.push([i, rows]);
+  for (let j = rows - 1; j >= 0; j -= 1) loop.push([cols, j]);
+  for (let i = cols - 1; i >= 1; i -= 1) loop.push([i, 0]);
+  for (let index = 0; index < loop.length; index += 1) {
+    const [i0, j0] = loop[index];
+    const [i1, j1] = loop[(index + 1) % loop.length];
+    tri(0, 0, 0, xAt(i1), yAt(j1), 0, xAt(i0), yAt(j0), 0);
+  }
   return bytes;
 }
 
 export function buildVertexHeights(input: {
-  widthMm: number;
-  heightMm: number;
   cols: number;
   rows: number;
-  borderWidthMm: number;
-  borderDepthMm: number;
-  /** Row 0 is the top of the image. */
-  luma: Float32Array;
-  lumaCols: number;
-  lumaRows: number;
-  settings: LayerSettings;
-  maxLayer: number;
+  /** Already stretched 0..1, length cols*rows. Row 0 is minimum Y (image bottom). */
+  unit: Float32Array;
+  minDepth: number;
+  actualDepth: number;
+  lipMm: number;
 }): Float32Array {
-  const { cols, rows, widthMm, heightMm, settings } = input;
+  const { cols, rows } = input;
+  if (input.unit.length !== cols * rows) {
+    throw new Error(`Expected ${cols * rows} luminance samples`);
+  }
   const heights = new Float32Array((cols + 1) * (rows + 1));
-  const border = Math.max(0, input.borderWidthMm);
-  const innerW = widthMm - 2 * border;
-  const innerH = heightMm - 2 * border;
-  const minLayer = Math.min(minBlendLayer(settings), input.maxLayer);
-  const maxLayer = Math.max(minLayer, input.maxLayer);
   for (let j = 0; j <= rows; j += 1) {
-    const y = (j / rows) * heightMm;
     for (let i = 0; i <= cols; i += 1) {
-      const x = (i / cols) * widthMm;
-      const onBorder = border > 0 && (innerW <= 0 || innerH <= 0
-        || x <= border || y <= border || x >= widthMm - border || y >= heightMm - border);
-      let z = input.borderDepthMm;
-      if (!onBorder) {
-        const u = border > 0 ? (x - border) / innerW : x / widthMm;
-        const v = border > 0 ? (y - border) / innerH : y / heightMm;
-        const sample = bilinear(input.luma, input.lumaCols, input.lumaRows, u, 1 - v);
-        z = layerTopMm(layerForLuminance(sample, minLayer, maxLayer), settings);
-      }
+      const lip = i === cols || j === rows;
+      const z = lip
+        ? input.lipMm
+        : heightForUnitLuminance(input.unit[j * cols + i], input.minDepth, input.actualDepth);
       heights[j * (cols + 1) + i] = z;
     }
   }
@@ -399,45 +400,45 @@ export function buildFaceMesh(input: {
   );
   const grid = meshGrid(size.widthMm, size.heightMm, input.settings.detailSize, input.maxTriangles);
   const raw = luminanceFromRgba(input.rgba, input.imageWidth, input.imageHeight);
-  const radius = smoothingRadiusPx(
-    input.imageWidth,
-    size.widthMm,
-    input.settings.detailSize,
-    input.smoothing,
-  );
-  const luma = smoothLuminance(raw, input.imageWidth, input.imageHeight, radius);
+  const { cols, rows } = grid;
+  const sampled = new Float32Array(cols * rows);
+  for (let j = 0; j < rows; j += 1) {
+    const imageV = 1 - (rows <= 1 ? 0 : j / (rows - 1));
+    for (let i = 0; i < cols; i += 1) {
+      const u = cols <= 1 ? 0 : i / (cols - 1);
+      sampled[j * cols + i] = bilinear(raw, input.imageWidth, input.imageHeight, u, imageV);
+    }
+  }
+  const smoothed = (input.smoothing ?? 1) > 0 ? binomialSmooth(sampled, cols, rows) : sampled;
+  const unit = stretchToUnit(smoothed);
   const layerCount = colorCoreLayerCount(input.settings);
   const maxLayer = Math.min(layerCount, input.stops[input.stops.length - 1].endLayer);
+  const actualDepthMm = layerTopMm(maxLayer, input.settings);
   const heights = buildVertexHeights({
-    widthMm: size.widthMm,
-    heightMm: size.heightMm,
-    cols: grid.cols,
-    rows: grid.rows,
-    borderWidthMm: input.settings.borderWidth,
-    borderDepthMm: input.settings.borderDepth,
-    luma,
-    lumaCols: input.imageWidth,
-    lumaRows: input.imageHeight,
-    settings: input.settings,
-    maxLayer,
+    cols,
+    rows,
+    unit,
+    minDepth: input.settings.minDepth,
+    actualDepth: actualDepthMm,
+    lipMm: input.settings.layerHeight,
   });
   const stl = encodeHeightfieldStl({
-    cols: grid.cols,
-    rows: grid.rows,
-    widthMm: size.widthMm,
-    heightMm: size.heightMm,
+    cols,
+    rows,
+    widthMm: grid.widthMm,
+    heightMm: grid.heightMm,
     heights,
-    header: input.header,
+    header: input.header ?? 'HueForge',
   });
   return {
-    widthMm: size.widthMm,
-    heightMm: size.heightMm,
+    widthMm: grid.widthMm,
+    heightMm: grid.heightMm,
     cols: grid.cols,
     rows: grid.rows,
     stepMm: grid.stepMm,
     triangles: grid.triangles,
     stl,
-    actualDepthMm: layerTopMm(maxLayer, input.settings),
+    actualDepthMm,
     layerCount,
   };
 }

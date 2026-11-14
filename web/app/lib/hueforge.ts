@@ -60,9 +60,12 @@ export function hexToRgb(hex: string): Rgb {
   return [(parsed >> 16) & 255, (parsed >> 8) & 255, parsed & 255];
 }
 
-/** Rec. 709 luminance of sRGB bytes, 0..1. HueForge's standard / lithophane brightness. */
+/**
+ * BT.601 luminance of sRGB bytes, 0..1. This is the lithophane "standard"
+ * brightness: it matches both HueForge STLs; Rec. 709 does not.
+ */
 export function standardLuminance(red: number, green: number, blue: number): number {
-  return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+  return (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
 }
 
 export function maxChannelLuminance(red: number, green: number, blue: number): number {
@@ -115,22 +118,66 @@ export function minBlendLayer(settings: LayerSettings): number {
 }
 
 /**
- * Standard brightness compensation. A mild power curve pulls midtones down the
- * core so a dark blue rock stays near the backing filament while highlights
- * still reach the top. 1 is linear.
+ * Standard brightness compensation: stretch the picture's own black and white
+ * onto the blend range. A power curve and a percentile clip both increased
+ * the error against the real STLs.
  */
-export const BRIGHTNESS_GAMMA = 1.6;
+export function stretchToUnit(luma: Float32Array): Float32Array {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let index = 0; index < luma.length; index += 1) {
+    const value = luma[index];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  const span = max - min;
+  const out = new Float32Array(luma.length);
+  if (!(span > 1e-8)) {
+    out.fill(0);
+    return out;
+  }
+  for (let index = 0; index < luma.length; index += 1) {
+    const shaped = (luma[index] - min) / span;
+    out[index] = shaped < 0 ? 0 : shaped > 1 ? 1 : shaped;
+  }
+  return out;
+}
 
 /** Standard mode: 0 maps to Min Depth, 1 maps to the top of the colour core. */
-export function layerForLuminance(
-  luminance: number,
-  minLayer: number,
-  maxLayer: number,
-  gamma = BRIGHTNESS_GAMMA,
-): number {
+export function layerForLuminance(luminance: number, minLayer: number, maxLayer: number): number {
   if (maxLayer <= minLayer) return minLayer;
-  const shaped = gamma === 1 ? clamp01(luminance) : clamp01(luminance) ** gamma;
-  return minLayer + Math.round(shaped * (maxLayer - minLayer));
+  const t = luminance < 0 ? 0 : luminance > 1 ? 1 : luminance;
+  return minLayer + Math.round(t * (maxLayer - minLayer));
+}
+
+/** Continuous mesh height. Not snapped to a layer. */
+export function heightForUnitLuminance(unit: number, minDepth: number, actualDepth: number): number {
+  const span = actualDepth - minDepth;
+  const t = unit < 0 ? 0 : unit > 1 ? 1 : unit;
+  return minDepth + t * span;
+}
+
+/** One [1, 2, 1] / 4 pass. A 4-cell box was a worse match to both STLs. */
+export function binomialSmooth(source: Float32Array, width: number, height: number): Float32Array {
+  if (width < 1 || height < 1) return source;
+  const horizontal = new Float32Array(source.length);
+  const output = new Float32Array(source.length);
+  const at = (buffer: Float32Array, x: number, y: number) => {
+    const xx = x < 0 ? 0 : x >= width ? width - 1 : x;
+    const yy = y < 0 ? 0 : y >= height ? height - 1 : y;
+    return buffer[yy * width + xx];
+  };
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      horizontal[y * width + x] = (at(source, x - 1, y) + 2 * at(source, x, y) + at(source, x + 1, y)) / 4;
+    }
+  }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      output[y * width + x] = (at(horizontal, x, y - 1) + 2 * at(horizontal, x, y) + at(horizontal, x, y + 1)) / 4;
+    }
+  }
+  return output;
 }
 
 export function transmission(thicknessMm: number, tdMm: number, density = TRANSMISSION_DENSITY): number {
@@ -447,25 +494,28 @@ export type RenderInput = {
 
 export function renderBlendedRgba(input: RenderInput): Uint8ClampedArray {
   const { width, height, settings, stops } = input;
-  const detail = input.settings.detailSize ?? 0.1;
-  const radius = smoothingRadiusPx(width, input.modelWidthMm, detail, input.smoothing ?? DEFAULT_SMOOTHING);
-  const luma = smoothLuminance(luminanceFromRgba(input.rgba, width, height), width, height, radius);
+  const smoothed = (input.smoothing ?? DEFAULT_SMOOTHING) > 0
+    ? binomialSmooth(luminanceFromRgba(input.rgba, width, height), width, height)
+    : luminanceFromRgba(input.rgba, width, height);
+  const luma = stretchToUnit(smoothed);
   const layerCount = Math.max(1, stops.length ? stops[stops.length - 1].endLayer : colorCoreLayerCount(settings));
   const minLayer = Math.min(minBlendLayer(settings), layerCount);
+  const actualDepth = layerTopMm(layerCount, settings);
   const palette = layerPalette(stops, settings, layerCount);
   const output = new Uint8ClampedArray(width * height * 4);
   const pixelMmX = input.modelWidthMm / Math.max(1, width);
   const pixelMmY = input.modelHeightMm / Math.max(1, height);
   const heightAt = (x: number, y: number) => {
     const sample = bilinear(luma, width, height, x / Math.max(1, width - 1), y / Math.max(1, height - 1));
-    return layerTopMm(layerForLuminance(sample, minLayer, layerCount), settings);
+    return heightForUnitLuminance(sample, settings.minDepth, actualDepth);
   };
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
       const offset = index * 4;
-      const layer = layerForLuminance(luma[index], minLayer, layerCount);
+      const z = heightForUnitLuminance(luma[index], settings.minDepth, actualDepth);
+      const layer = Math.min(layerCount, Math.max(minLayer, layerForDepth(z, settings)));
       let [red, green, blue] = palette[layer - 1] ?? palette[0];
       if (input.shade) {
         const zLeft = heightAt(x - 1, y);
