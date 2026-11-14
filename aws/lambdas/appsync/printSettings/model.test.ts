@@ -15,8 +15,8 @@ test('a row written before the colour-core fields still loads, with the new defa
   assert.equal(loaded.nozzleSize, 0.4);
   assert.equal(loaded.minDepth, DEFAULT_PRINT_SETTINGS.minDepth);
   assert.equal(loaded.maxDepth, DEFAULT_PRINT_SETTINGS.maxDepth);
-  assert.equal(loaded.borderWidth, 4);
-  assert.equal(loaded.borderDepth, 3);
+  assert.equal(loaded.borderWidth, 0);
+  assert.equal(loaded.borderDepth, 0);
   assert.equal(loaded.detailSize, 0.1);
 });
 

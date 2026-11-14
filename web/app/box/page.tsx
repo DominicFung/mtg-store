@@ -1,36 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ImageCropper, { CropBox } from './imageCropper';
 import SpinningBoxWithTextures from './spinningBox';
 import ColorCore from './colorCore';
-import { useCart } from '../lib/useCart';
+import CommanderSearch from './commanderSearch';
+import OrderPanel from './orderPanel';
+import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
 import { useFilaments } from '../lib/filaments';
 import {
   defaultLayerSelection,
   Filament,
-  FilamentLayerSettings,
   MOCK_FILAMENTS,
 } from '../lib/filamentCatalogue';
-import { colorCoreLayerCount, evenStops, formatSwapDepth, shortFilamentName } from '../lib/hueforge';
-import { downloadPrintBundle } from '../lib/printBundle';
-import { modelSizeForCrop } from '../lib/printGeometry';
-import { renderLayeredCrops, toCoreStops } from '../lib/renderLayers';
+import { colorCoreLayerCount, evenStops } from '../lib/hueforge';
+import { modelSizeForCrop, profileToSettings, resolveProfile, type ResolvedProfile } from '../lib/printGeometry';
+import { LAUNCH_PROFILES } from '../lib/printGeometry';
+import { renderLayeredCrops } from '../lib/renderLayers';
+import { listActiveProfiles } from '../lib/shopOrders';
 import { usePrintSettings } from '../lib/usePrintSettings';
-import horizonSample from './sample.webp';
-import landscapeSample from './mana-landscape.png';
 
 const EMPTY_TEXTURES: [string, string, string] = ['', '', ''];
-const STEPS = ['Upload', 'Crop', 'Colours'] as const;
-
-const SAMPLES = [
-  { title: 'Horizon sample', src: horizonSample.src, filename: 'horizon-sample.webp' },
-  { title: 'Mana landscape', src: landscapeSample.src, filename: 'mana-landscape.png' },
-];
+const STEPS = ['Commander', 'Crop', 'Colours'] as const;
 
 const startingLayers = defaultLayerSelection(MOCK_FILAMENTS);
-const FACE_NAMES = ['Front', 'Spine', 'Back'] as const;
 
 export default function Home() {
   const [step, setStep] = useState(1);
@@ -42,14 +36,18 @@ export default function Home() {
   const [imageToken, setImageToken] = useState(0);
   const [layers, setLayers] = useState<Filament[]>(startingLayers);
   const [stops, setStops] = useState<number[]>(() => evenStops(startingLayers.length, 50));
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState('');
   const [previewReady, setPreviewReady] = useState(false);
+  const [coloursTouched, setColoursTouched] = useState(false);
+  const [commanderName, setCommanderName] = useState('');
+  const [profiles, setProfiles] = useState<ResolvedProfile[]>(() => LAUNCH_PROFILES.map(resolveProfile));
+  const [profileId, setProfileId] = useState(LAUNCH_PROFILES[0].id);
   const { filaments, source } = useFilaments();
-  const { settings, source: settingsSource } = usePrintSettings();
-  const { addItem } = useCart();
+  const { settings: fallbackSettings } = usePrintSettings();
   const layersRef = useRef(layers);
   layersRef.current = layers;
+  const profile = profiles.find((entry) => entry.id === profileId) ?? profiles[0];
+  const settings = profile ? profileToSettings(profile) : fallbackSettings;
+  const layerCount = profile?.layerCount ?? colorCoreLayerCount(settings);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -71,20 +69,6 @@ export default function Home() {
     multiple: false,
   });
 
-  const useSample = async (src: string) => {
-    const response = await fetch(src);
-    const blob = await response.blob();
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImage(reader.result as string);
-      setImageToken((current) => current + 1);
-      setCrops(['', '', '']);
-      setCropPx([null, null, null]);
-      setCropBox(null);
-    };
-    reader.readAsDataURL(blob);
-  };
-
   useEffect(() => {
     const byId = new Map(filaments.map((filament) => [filament.id, filament]));
     const current = layersRef.current;
@@ -94,8 +78,8 @@ export default function Home() {
     }
     const next = defaultLayerSelection(filaments);
     setLayers(next);
-    setStops(evenStops(next.length, colorCoreLayerCount(settings)));
-  }, [filaments, settings]);
+    setStops(evenStops(next.length, colorCoreLayerCount(fallbackSettings)));
+  }, [filaments, fallbackSettings]);
 
   useEffect(() => {
     if (step === 3) setPreviewReady(true);
@@ -144,8 +128,6 @@ export default function Home() {
     };
   }, [crops]);
 
-  const layerCount = colorCoreLayerCount(settings);
-  const coreStops = useMemo(() => toCoreStops(layers, stops), [layers, stops]);
   const faceSizes = cropPx.map((size) => (
     size ? modelSizeForCrop(size.width, size.height, settings.height) : null
   ));
@@ -153,43 +135,66 @@ export default function Home() {
 
   const unlocked = crops[0] ? 3 : image ? 2 : 1;
 
-  const download = async () => {
-    setExporting(true);
-    setExportError('');
-    try {
-      const layeredNow = layered[0] ? layered : await renderLayeredCrops(crops, layers, stops, settings);
-      await downloadPrintBundle({
-        crops,
-        layered: layeredNow,
-        layers,
-        stops,
+  useEffect(() => {
+    if (!crops[0] || coloursTouched || filaments.length === 0) return;
+    let cancelled = false;
+    const image = new Image();
+    image.src = crops[0];
+    image.decode().then(() => {
+      const canvas = document.createElement('canvas');
+      const width = Math.min(160, image.naturalWidth);
+      const height = Math.max(1, Math.round(image.naturalHeight * (width / image.naturalWidth)));
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return;
+      context.drawImage(image, 0, 0, width, height);
+      const pixels = context.getImageData(0, 0, width, height).data;
+      const choice = chooseColorCore({
+        rgba: new Uint8Array(pixels),
+        width,
+        height,
+        filaments,
         settings,
-        settingsSource,
       });
-    } catch (error) {
-      setExportError(error instanceof Error ? error.message : 'Could not build the print files');
-    } finally {
-      setExporting(false);
-    }
-  };
+      if (cancelled) return;
+      const byId = new Map(filaments.map((filament) => [filament.id, filament]));
+      const nextLayers = choice.ids.map((id) => byId.get(id)).filter((filament): filament is Filament => Boolean(filament));
+      if (nextLayers.length > 0) {
+        setLayers(nextLayers);
+        setStops(choice.endLayers);
+      }
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [crops, coloursTouched, filaments, profile?.id, layerCount]);
 
-  const addToCart = () => {
-    const settingsForCart: FilamentLayerSettings = { layers, stops };
-    addItem({
-      id: 'custom-deck-box',
-      name: 'Custom Deck Box',
-      quantity: 1,
-      images: layered[0] ? [...layered] : [...crops],
-      filamentLayers: settingsForCart,
+  useEffect(() => {
+    let cancelled = false;
+    listActiveProfiles().then((next) => {
+      if (cancelled || next.length === 0) return;
+      setProfiles(next);
+      setProfileId((current) => (next.some((entry) => entry.id === current) ? current : (next.find((entry) => entry.isDefault) ?? next[0]).id));
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setStops((current) => {
+      if (current.length === layers.length && current[current.length - 1] === layerCount) return current;
+      return evenStops(layers.length, layerCount);
     });
-  };
+  }, [layerCount, layers.length]);
 
   return (
     <div className="min-h-screen overflow-x-clip bg-gradient-to-b from-[#1a1a2e] to-[#16213e] font-serif text-white">
       <div className="mx-auto w-full max-w-6xl px-4 py-4 pb-28 sm:px-8 sm:py-8">
         <header className="mb-4 text-center sm:mb-6">
-          <h1 className="text-2xl font-bold tracking-wide text-[#e2c275] sm:text-4xl">Custom deck box</h1>
-          <p className="mt-1 text-sm text-gray-300">Upload art, crop the three faces, then set the colour core.</p>
+          <h1 className="text-2xl font-bold tracking-wide text-[#e2c275] sm:text-4xl">Commander Deck Box</h1>
+          <p className="mt-1 text-sm text-gray-300">Find your commander, crop the three faces, then adjust the colours. We print it.</p>
         </header>
 
         <ol className="mb-2 grid grid-cols-3 gap-2" aria-label="Progress">
@@ -226,6 +231,20 @@ export default function Home() {
         </p>
 
         <div className={step === 1 ? 'block' : 'hidden'}>
+          <CommanderSearch onArtwork={(src, name) => {
+            setImage(src);
+            setCommanderName(name);
+            setImageToken((current) => current + 1);
+            setCrops(['', '', '']);
+            setCropPx([null, null, null]);
+            setCropBox(null);
+            setColoursTouched(false);
+          }} />
+          <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wide text-gray-500">
+            <span className="h-px flex-1 bg-white/10" />
+            or upload your own art
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
           <div
             {...getRootProps()}
             className={`cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition sm:p-10 ${
@@ -236,26 +255,11 @@ export default function Home() {
             <p className="text-base font-semibold">{isDragActive ? 'Drop the image here' : 'Drag an image here, or tap to choose one'}</p>
             <p className="mt-1 text-xs text-gray-400">JPG, PNG, or WebP</p>
           </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {SAMPLES.map((sample) => (
-              <button
-                key={sample.filename}
-                type="button"
-                onClick={() => { void useSample(sample.src); }}
-                className="flex min-h-11 items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-2 text-left hover:border-[#e2c275]/60"
-              >
-                <img src={sample.src} alt="" className="h-16 w-16 shrink-0 rounded-md object-cover" />
-                <span>
-                  <span className="block text-sm font-semibold text-[#e2c275]">{sample.title}</span>
-                  <span className="block text-xs text-gray-400">Try sample artwork</span>
-                </span>
-              </button>
-            ))}
-          </div>
-
           {image && (
-            <img src={image} alt="Selected artwork" className="mx-auto mt-4 max-h-56 w-full rounded-lg object-contain" />
+            <figure className="mt-4">
+              <img src={image} alt={commanderName ? `${commanderName} extended for the box` : 'Selected artwork'} className="mx-auto max-h-72 w-full rounded-lg object-contain" />
+              {commanderName && <figcaption className="mt-1 text-center text-xs text-gray-400">{commanderName}, extended to the three faces</figcaption>}
+            </figure>
           )}
         </div>
 
@@ -263,7 +267,7 @@ export default function Home() {
           <div>
             <h2 className="text-lg font-semibold text-[#e2c275]">Crop to the box faces</h2>
             <p className="mt-1 text-sm text-gray-300">
-              Drag the frame and the gold corners. It stays at the three-face ratio: front, spine, then back. Each face becomes its own colour-core STL.
+              Drag the frame and the gold corners. It stays at the three-face ratio: front, spine, then back.
             </p>
             {image ? (
               <ImageCropper
@@ -299,40 +303,7 @@ export default function Home() {
                   ))}
                 </div>
               )}
-              {faceSizes.some(Boolean) && (
-                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-                  <h2 className="text-sm font-semibold text-[#e2c275]">One model per face</h2>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {faceSizes.map((size, index) => (
-                      <li key={FACE_NAMES[index]}>
-                        {FACE_NAMES[index]}
-                        {size ? ` ${size.widthMm.toFixed(2)} × ${size.heightMm.toFixed(2)} mm` : ' — waiting for the crop'}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-1 text-xs text-gray-400">
-                    Height is the shared face height ({settings.height} mm). Width follows that crop, then both snap to the {settings.detailSize} mm grid.
-                    The mesh is centred, the back is flat, and the far edges drop to one layer. The download caps the triangle count so a phone can build it.
-                  </p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    First layer {settings.baseLayerHeight} mm, then {settings.layerHeight} mm.
-                    Colour core {layerCount} layers. Min depth {settings.minDepth} mm, max depth {settings.maxDepth} mm.
-                    {' '}
-                    {settingsSource === 'api' ? 'Loaded from shop print settings.' : 'Built-in defaults. The shop API is not configured in this session.'}
-                  </p>
-                  <p className="mt-2 text-xs text-gray-400">
-                    The download is front.stl, spine.stl, and back.stl (each a watertight colour core), details.txt with a swap section per face, filament-layers.json, and the six face images.
-                  </p>
-                  <ol className="mt-3 space-y-1 text-xs text-gray-200">
-                    <li>Start with {shortFilamentName(coreStops[0]?.filament ?? { name: 'filament', td: 0 })}</li>
-                    {coreStops.slice(0, -1).map((stop, index) => (
-                      <li key={`${stop.endLayer}-${index}`}>
-                        Layer {stop.endLayer} ({formatSwapDepth(stop.endLayer, settings)} mm) → {shortFilamentName(coreStops[index + 1].filament)}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
+              {commanderName && <p className="mt-2 text-center text-sm text-[#e2c275]">{commanderName}</p>}
             </div>
             <div className="min-w-0">
               <ColorCore
@@ -343,21 +314,28 @@ export default function Home() {
                 layerCount={layerCount}
                 settings={settings}
                 onChange={(nextLayers, nextStops) => {
+                  setColoursTouched(true);
                   setLayers(nextLayers);
                   setStops(nextStops);
                 }}
               />
             </div>
           </div>
-          {exportError && <p className="mt-3 text-sm text-amber-200">{exportError}</p>}
-          <button
-            type="button"
-            disabled={!crops[0]}
-            onClick={addToCart}
-            className="mt-4 min-h-11 w-full rounded-md border border-[#e2c275]/50 px-4 text-sm text-[#e2c275] hover:bg-white/5 disabled:opacity-40 sm:w-auto"
-          >
-            Add to cart
-          </button>
+          {profile && (
+            <OrderPanel
+              crops={crops}
+              previews={layered[0] ? layered : crops}
+              layers={layers}
+              stops={stops}
+              profile={profile}
+              profiles={profiles}
+              onProfile={(id) => {
+                setProfileId(id);
+                setColoursTouched(false);
+              }}
+              faceSizes={faceSizes}
+            />
+          )}
         </div>
       </div>
 
@@ -381,14 +359,7 @@ export default function Home() {
               Next
             </button>
           ) : (
-            <button
-              type="button"
-              disabled={!crops[0] || exporting}
-              onClick={() => { void download(); }}
-              className="min-h-11 flex-[2] rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:bg-gray-500 disabled:text-gray-200 sm:flex-none sm:px-8"
-            >
-              {exporting ? 'Building STL files…' : 'Download print bundle'}
-            </button>
+            <p className="flex flex-[2] items-center text-sm text-gray-300 sm:flex-none">Place the order in the form above.</p>
           )}
         </div>
       </div>

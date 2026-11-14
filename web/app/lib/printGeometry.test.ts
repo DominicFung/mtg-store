@@ -13,6 +13,7 @@ import {
   type Triangle,
 } from './printGeometry';
 import {
+  applyBrightness,
   colorAtLayer,
   colorCoreLayerCount,
   evenStops,
@@ -24,12 +25,15 @@ import {
   layerTopMm,
   moveStop,
   removeStop,
+  resolveSmoothPasses,
   shortFilamentName,
   transmission,
   TRANSMISSION_DENSITY,
   type CoreStop,
   type LayerSettings,
 } from './hueforge';
+import { LAUNCH_PROFILES, profileToSettings, resolveProfile } from './printGeometry';
+import * as sharedMesh from '../../../packages/print-core/src/printGeometry';
 
 const settings: LayerSettings = {
   layerHeight: 0.04,
@@ -126,6 +130,44 @@ Swap Instructions:
 function nearly(actual: number, expected: number, epsilon = 1e-3) {
   assert.ok(Math.abs(actual - expected) <= epsilon, `expected ${expected}, got ${actual}`);
 }
+
+test('the browser mesh and the shared package are the same function', () => {
+  assert.equal(buildFaceMesh, sharedMesh.buildFaceMesh);
+  assert.equal(meshGrid, sharedMesh.meshGrid);
+});
+
+test('smoothing 4 is one 3x3 on a 0.10 mm grid and none on a 0.20 mm grid', () => {
+  assert.equal(resolveSmoothPasses(0.1, undefined), 1);
+  assert.equal(resolveSmoothPasses(0.2, undefined), 0);
+  assert.equal(resolveSmoothPasses(0.1, 0), 0);
+  assert.equal(resolveSmoothPasses(0.2, 1), 1);
+});
+
+test('brightness adjust pulls white down and leaves black on min depth', () => {
+  const shifted = applyBrightness(Float32Array.of(0, 0.5, 1), -0.14);
+  nearly(shifted[0], 0, 1e-6);
+  nearly(shifted[1], 0.36, 1e-6);
+  nearly(shifted[2], 0.86, 1e-6);
+  const white = 0.24 + shifted[2] * (2.08 - 0.24);
+  nearly(white, 1.8224, 1e-4);
+});
+
+test('the launch profiles derive 50 layers at 0.2 mm and layer 24 at max depth for 0.4 mm', () => {
+  const fine = resolveProfile(LAUNCH_PROFILES[0]);
+  const coarse = resolveProfile(LAUNCH_PROFILES[1]);
+  assert.equal(fine.layerCount, 50);
+  assert.equal(fine.layersAtMaxDepth, 49);
+  assert.equal(fine.isDefault, true);
+  assert.equal(coarse.layersAtMaxDepth, 24);
+  assert.equal(layerTopMm(24, coarse), 2);
+  assert.equal(coarse.layerCount, 25);
+  nearly(coarse.coreTopMm, 2.08, 1e-6);
+  assert.equal(coarse.brightnessAdjust, -0.14);
+  const settings = profileToSettings(coarse);
+  assert.equal(settings.detailSize, 0.2);
+  assert.equal(settings.nozzleSize, 0.4);
+  assert.equal(settings.height, 105.45);
+});
 
 test('the colour core is 50 layers and layer tops match the slider depths', () => {
   assert.equal(colorCoreLayerCount(settings), 50);

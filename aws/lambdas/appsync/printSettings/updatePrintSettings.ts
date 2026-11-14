@@ -1,5 +1,6 @@
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import type { AppSyncResolverEvent } from 'aws-lambda';
+import { assertAdmin } from '../../orders/auth';
 import { assertPrintSettings, PrintSettingsRecord } from './model';
 
 const tableName = process.env.PRINT_SETTINGS_TABLE_NAME;
@@ -22,6 +23,7 @@ type Input = {
 export const handler = async (
   event: AppSyncResolverEvent<{ input: Input }>,
 ): Promise<PrintSettingsRecord> => {
+  assertAdmin(event.identity);
   if (!tableName) {
     throw new Error('PRINT_SETTINGS_TABLE_NAME is not set');
   }
