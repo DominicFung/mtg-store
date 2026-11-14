@@ -15,6 +15,7 @@ const LIST_FILAMENTS = `query ListFilaments {
     finish
     sortOrder
     approximate
+    type
   }
 }`;
 
@@ -43,6 +44,7 @@ function normalizeFilament(row: unknown): Filament | null {
     finish,
     sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
     approximate: item.approximate !== false,
+    type: typeof item.type === 'string' && item.type.trim() ? item.type.trim() : 'PLA',
   };
 }
 

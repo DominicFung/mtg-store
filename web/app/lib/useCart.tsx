@@ -23,7 +23,7 @@ function recipeKey(item: CartItem): string {
   if (!item.filamentLayers) return '';
   return JSON.stringify({
     ids: item.filamentLayers.layers.map((layer) => layer.id),
-    boundaries: item.filamentLayers.boundaries.map((value) => Math.round(value * 1000) / 1000),
+    stops: item.filamentLayers.stops,
   });
 }
 

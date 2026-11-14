@@ -25,13 +25,15 @@ export type Filament = {
   sortOrder: number;
   /** True while hex and td are still the placeholder estimates. */
   approximate: boolean;
+  /** Polymer. Omitted rows are PLA. */
+  type?: string | null;
 };
 
 export type FilamentLayerSettings = {
-  /** Bottom (printed first, shadows) to top (highlights). */
+  /** Bottom (printed first) to top. */
   layers: Filament[];
-  /** Luminance hand-off of each layer except the last. Length is layers.length - 1. */
-  boundaries: number[];
+  /** Inclusive end layer of each filament. Same length as layers. */
+  stops: number[];
 };
 
 export const MOCK_FILAMENTS: Filament[] = [

@@ -12,6 +12,11 @@ type Input = {
   width: number;
   height: number;
   nozzleSize: number;
+  minDepth?: number;
+  maxDepth?: number;
+  borderWidth?: number;
+  borderDepth?: number;
+  detailSize?: number;
 };
 
 export const handler = async (
@@ -31,6 +36,11 @@ export const handler = async (
       width: { N: String(saved.width) },
       height: { N: String(saved.height) },
       nozzleSize: { N: String(saved.nozzleSize) },
+      minDepth: { N: String(saved.minDepth) },
+      maxDepth: { N: String(saved.maxDepth) },
+      borderWidth: { N: String(saved.borderWidth) },
+      borderDepth: { N: String(saved.borderDepth) },
+      detailSize: { N: String(saved.detailSize) },
     },
   }));
   return saved;

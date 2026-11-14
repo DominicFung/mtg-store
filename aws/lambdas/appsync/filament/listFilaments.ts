@@ -17,6 +17,7 @@ type FilamentRow = {
   finish?: string;
   sortOrder?: number;
   approximate?: boolean;
+  type?: string;
 };
 
 type FilamentResult = {
@@ -30,6 +31,7 @@ type FilamentResult = {
   finish: string | null;
   sortOrder: number;
   approximate: boolean;
+  type: string;
 };
 
 export const handler = async (event: AppSyncResolverEvent<Record<string, never>>): Promise<FilamentResult[]> => {
@@ -60,6 +62,7 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, never>>
         sortOrder: typeof row.sortOrder === 'number' ? row.sortOrder : 0,
         // Missing flag stays approximate so unmeasured rows are not treated as final.
         approximate: row.approximate !== false,
+        type: typeof row.type === 'string' && row.type.trim() ? row.type.trim() : 'PLA',
       });
     }
   }
