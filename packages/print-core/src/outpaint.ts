@@ -1,6 +1,33 @@
 /** Three box faces share this frame: front 293, spine 255, back 293, height 326. */
 export const WRAP_ASPECT = (293 + 255 + 293) / 326;
 
+export type OutpaintMargins = { left: number; right: number; up: number; down: number };
+
+/**
+ * Pixels to add so the art reaches the three-face frame.
+ * Stability Image Outpaint allows at most 2000 pixels on each side.
+ */
+export function outpaintMargins(width: number, height: number): OutpaintMargins {
+  if (width < 1 || height < 1) return { left: 0, right: 0, up: 0, down: 0 };
+  const aspect = width / height;
+  if (aspect < WRAP_ASPECT - 0.01) {
+    const [left, right] = splitMargin(height * WRAP_ASPECT - width);
+    return { left, right, up: 0, down: 0 };
+  }
+  if (aspect > WRAP_ASPECT + 0.01) {
+    const [up, down] = splitMargin(width / WRAP_ASPECT - height);
+    return { left: 0, right: 0, up, down };
+  }
+  return { left: 0, right: 0, up: 0, down: 0 };
+}
+
+function splitMargin(extra: number): [number, number] {
+  const total = Math.max(0, Math.round(extra));
+  const first = Math.min(2000, Math.floor(total / 2));
+  const second = Math.min(2000, total - first);
+  return [first, second];
+}
+
 export type RgbaImage = { rgba: Uint8Array; width: number; height: number };
 
 /**

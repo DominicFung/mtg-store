@@ -8,6 +8,8 @@ type CardHit = {
   art: string;
 };
 
+import { outpaintArt } from '../lib/shopOrders';
+
 type Props = {
   onArtwork: (src: string, name: string) => void;
 };
@@ -62,15 +64,9 @@ export default function CommanderSearch({ onArtwork }: Props) {
     setBusy(true);
     setStatus(`Extending ${hit.name} to the box…`);
     try {
-      const response = await fetch('/api/outpaint', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ imageUrl: hit.art }),
-      });
-      const body = await response.json() as { image?: string; source?: string; error?: string };
-      if (!response.ok || !body.image) throw new Error(body.error || 'Could not extend the artwork');
-      onArtwork(body.image, hit.name);
-      setStatus(body.source === 'bedrock' ? 'Extended with Amazon Bedrock.' : 'Extended to the three-face frame.');
+      const extended = await outpaintArt(hit.art);
+      onArtwork(extended.image, hit.name);
+      setStatus(extended.source === 'edge-extend' ? 'Extended to the three-face frame.' : 'Extended with Stability on Amazon Bedrock.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not extend the artwork');
     } finally {

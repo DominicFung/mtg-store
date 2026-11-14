@@ -12,6 +12,8 @@ interface AppsyncProps {
   name: string
   notifyEmail: string
   customerStatusEmails: boolean
+  /** Bedrock model or inference-profile id. us.* profiles need the profile ARN. */
+  bedrockImageModel: string
 }
 
 export class AppsyncStack extends Stack {
@@ -59,14 +61,12 @@ export class AppsyncStack extends Stack {
     if (!apiScope) {
       throw new Error('Default API key has no parent scope')
     }
-    const hourSeconds = 60 * 60
-    const synthHour = Math.floor(Date.now() / 1000 / hourSeconds) * hourSeconds
-    // 365 days is the AppSync maximum, measured from deploy time. Stamp expiry one hour
-    // under 365 days from the synth hour so a deploy shortly after synth is accepted.
+    // Fixed epoch so CloudFormation does not replace the key on every deploy.
+    // 1826204400 is within AppSync's 365-day maximum from the key's creation.
     const shopKey = new CfnApiKey(apiScope, 'ShopApiKey20261112', {
       apiId: appsync.apiId,
       description: 'Storefront API key. Rotate before it expires (365 day AppSync maximum).',
-      expires: synthHour + (365 * 24 * hourSeconds) - hourSeconds,
+      expires: 1826204400,
     })
 
     const amplifyKeyOutput = this.node.tryFindChild('awsAppsyncApiKey') as CfnOutput | undefined
@@ -296,19 +296,37 @@ export class AppsyncStack extends Stack {
       depsLockFilePath: join(__dirname, '../lambdas', 'package-lock.json'),
       environment: {
         ...orderEnvironment,
-        BEDROCK_IMAGE_MODEL: 'amazon.nova-canvas-v1:0',
-        BEDROCK_FALLBACK_MODEL: 'amazon.titan-image-generator-v2:0',
+        BEDROCK_IMAGE_MODEL: props.bedrockImageModel,
       },
       runtime: Runtime.NODEJS_22_X,
     })
     outpaint.addToRolePolicy(new PolicyStatement({
       actions: ['bedrock:InvokeModel'],
-      resources: [
-        `arn:aws:bedrock:${this.region}::foundation-model/amazon.nova-canvas-v1:0`,
-        `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-image-generator-v2:0`,
-      ],
+      resources: bedrockInvokeResources(this.region, this.account, props.bedrockImageModel),
     }))
     appsync.addLambdaDataSource(`${props.name}OutpaintDS`, outpaint)
       .createResolver(`${props.name}-OutpaintResolver`, { typeName: 'Query', fieldName: 'outpaintCommanderArt' })
   }
+}
+
+/**
+ * InvokeModel on a geo profile also needs the foundation model in each
+ * destination region. us.stability.stable-outpaint-v1:0 routes across
+ * us-east-1, us-east-2, and us-west-2.
+ */
+function bedrockInvokeResources(region: string, account: string, modelId: string): string[] {
+  const geo = /^(us|eu|apac|global)\./.exec(modelId)
+  if (!geo) {
+    return [`arn:aws:bedrock:${region}::foundation-model/${modelId}`]
+  }
+  const foundationId = modelId.slice(geo[0].length)
+  const destinations = geo[1] === 'us'
+    ? ['us-east-1', 'us-east-2', 'us-west-2']
+    : geo[1] === 'eu'
+      ? ['eu-central-1', 'eu-west-1', 'eu-west-3']
+      : [region]
+  return [
+    `arn:aws:bedrock:${region}:${account}:inference-profile/${modelId}`,
+    ...destinations.map((destination) => `arn:aws:bedrock:${destination}::foundation-model/${foundationId}`),
+  ]
 }

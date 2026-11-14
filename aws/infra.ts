@@ -16,6 +16,9 @@ if (!notifyEmail.includes('@')) {
 }
 const customerStatusEmails = app.node.tryGetContext('customerStatusEmails') === true
   || app.node.tryGetContext('customerStatusEmails') === 'true'
+const bedrockImageModel = String(
+  app.node.tryGetContext('bedrockImageModel') ?? 'us.stability.stable-outpaint-v1:0',
+)
 
 const s3Stack = new S3Stack(app, `${PROJECT_NAME}-S3Stack`, { name: PROJECT_NAME })
 const dynamoStack = new DynamoStack(app, `${PROJECT_NAME}-DynamoStack`, { name: PROJECT_NAME })
@@ -31,6 +34,7 @@ const appsyncStack = new AppsyncStack(app, `${PROJECT_NAME}-AppsyncStack`, {
   name: PROJECT_NAME,
   notifyEmail,
   customerStatusEmails,
+  bedrockImageModel,
 })
 appsyncStack.addDependency(dynamoStack)
 appsyncStack.addDependency(authStack)

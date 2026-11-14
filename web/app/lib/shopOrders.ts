@@ -3,6 +3,7 @@ import type { Filament } from './filamentCatalogue';
 import type { NozzleProfile, ResolvedProfile } from './printGeometry';
 import { LAUNCH_PROFILES, profileToSettings, resolveProfile } from './printGeometry';
 import { newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
+import { publicConfig } from './publicConfig';
 
 export type ShopStop = {
   filamentId: string;
@@ -50,11 +51,11 @@ const PROFILE_KEY = 'mtg-shop-profiles';
 const TOKEN_KEY = 'mtg-admin-token';
 
 export function shopConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_APPSYNC_URL && process.env.NEXT_PUBLIC_APPSYNC_API_KEY);
+  return Boolean(publicConfig.appsyncUrl && publicConfig.appsyncApiKey);
 }
 
 export function adminConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID && process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID);
+  return Boolean(publicConfig.cognitoClientId && publicConfig.cognitoUserPoolId);
 }
 
 function readOrders(): ShopOrder[] {
@@ -135,6 +136,28 @@ function stopsFrom(layers: Filament[], endLayers: number[], profile: ResolvedPro
     endLayer: endLayers[index] ?? profile.layerCount,
     depthMm: layerTopMm(endLayers[index] ?? profile.layerCount, profileToSettings(profile)),
   }));
+}
+
+export async function outpaintArt(imageUrl: string): Promise<{ image: string; source: string }> {
+  if (!shopConfigured()) {
+    const response = await fetch('/api/outpaint', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ imageUrl }),
+    });
+    const body = await response.json() as { image?: string; source?: string; error?: string };
+    if (!response.ok || !body.image) throw new Error(body.error || 'Could not extend the artwork');
+    return { image: body.image, source: body.source ?? 'edge-extend' };
+  }
+  const data = await gql<{ outpaintCommanderArt: { imageUrl: string; source: string } }>(
+    `query Outpaint($imageUrl: String!) {
+      outpaintCommanderArt(imageUrl: $imageUrl) { imageUrl source }
+    }`,
+    { imageUrl },
+    'key',
+  );
+  if (!data.outpaintCommanderArt.imageUrl) throw new Error('Could not extend the artwork');
+  return { image: data.outpaintCommanderArt.imageUrl, source: data.outpaintCommanderArt.source };
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<ShopOrder> {
@@ -351,8 +374,8 @@ export function adminToken(): string | null {
 }
 
 export async function adminSignIn(email: string, password: string): Promise<void> {
-  const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
-  const region = process.env.NEXT_PUBLIC_AWS_REGION || 'us-east-1';
+  const clientId = publicConfig.cognitoClientId;
+  const region = publicConfig.awsRegion || 'us-east-1';
   if (!clientId) throw new Error('Cognito is not configured in this session');
   const response = await fetch(`https://cognito-idp.${region}.amazonaws.com/`, {
     method: 'POST',
@@ -462,7 +485,7 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
 }
 
 async function gql<T>(query: string, variables: unknown, auth: 'key' | 'admin'): Promise<T> {
-  const url = process.env.NEXT_PUBLIC_APPSYNC_URL;
+  const url = publicConfig.appsyncUrl;
   if (!url) throw new Error('The shop API is not configured');
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (auth === 'admin') {
@@ -470,7 +493,7 @@ async function gql<T>(query: string, variables: unknown, auth: 'key' | 'admin'):
     if (!token) throw new Error('Sign in as the shop admin');
     headers.Authorization = token;
   } else {
-    const apiKey = process.env.NEXT_PUBLIC_APPSYNC_API_KEY;
+    const apiKey = publicConfig.appsyncApiKey;
     if (!apiKey) throw new Error('The shop API is not configured');
     headers['x-api-key'] = apiKey;
   }

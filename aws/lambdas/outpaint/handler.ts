@@ -5,17 +5,18 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { decode as decodeJpeg } from 'jpeg-js';
 import { PNG } from 'pngjs';
-import { extendToAspect, WRAP_ASPECT } from '../../../packages/print-core/src/outpaint';
+import { extendToAspect, outpaintMargins, WRAP_ASPECT } from '../../../packages/print-core/src/outpaint';
 import { requiredEnv, s3 } from '../orders/store';
 
 const ALLOWED = [/^https:\/\/cards\.scryfall\.io\//, /^https:\/\/api\.scryfall\.com\//];
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
+const DEFAULT_MODEL = 'us.stability.stable-outpaint-v1:0';
+
 /**
- * Extends commander art to the three-face frame.
- * Tries Amazon Nova Canvas outpainting in us-east-1, then Titan Image Generator v2.
- * If neither model is enabled, the edge extend is cached instead so the order can continue.
- * Dominic enables the model under Bedrock → Model access in us-east-1.
+ * Extends commander art to the three-face frame with Stability Image Outpaint.
+ * BEDROCK_IMAGE_MODEL overrides the model id (default us.stability.stable-outpaint-v1:0).
+ * If Bedrock rejects the call, the edge extension is cached so the crop can continue.
  */
 export const handler = async (event: AppSyncResolverEvent<{ imageUrl: string }>) => {
   const imageUrl = event.arguments?.imageUrl ?? '';
@@ -34,22 +35,14 @@ export const handler = async (event: AppSyncResolverEvent<{ imageUrl: string }>)
 
   let png = encodePng(target.rgba, target.width, target.height);
   let source = 'edge-extend';
-  const modelId = process.env.BEDROCK_IMAGE_MODEL || 'amazon.nova-canvas-v1:0';
-  try {
-    const painted = await outpaintWithBedrock(modelId, decoded, target.width, target.height);
-    png = painted;
-    source = modelId;
-  } catch (error) {
-    const fallback = process.env.BEDROCK_FALLBACK_MODEL || 'amazon.titan-image-generator-v2:0';
-    if (fallback !== modelId) {
-      try {
-        png = await outpaintWithBedrock(fallback, decoded, target.width, target.height);
-        source = fallback;
-      } catch (second) {
-        console.error('Bedrock outpaint unavailable', error, second);
-      }
-    } else {
-      console.error('Bedrock outpaint unavailable', error);
+  const modelId = process.env.BEDROCK_IMAGE_MODEL || DEFAULT_MODEL;
+  const margins = outpaintMargins(decoded.width, decoded.height);
+  if (margins.left + margins.right + margins.up + margins.down > 0) {
+    try {
+      png = await outpaintWithBedrock(modelId, decoded, margins);
+      source = modelId;
+    } catch (error) {
+      console.error('Bedrock outpaint unavailable; using the edge extension', error);
     }
   }
   await s3.send(new PutObjectCommand({
@@ -70,23 +63,20 @@ async function readCache(key: string): Promise<string | null> {
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: requiredEnv('ORDER_BUCKET_NAME'), Key: key }), { expiresIn: 60 * 60 });
 }
 
-async function outpaintWithBedrock(modelId: string, source: { rgba: Uint8Array; width: number; height: number }, width: number, height: number): Promise<Buffer> {
-  const fitted = fitBedrock(source, width, height);
+async function outpaintWithBedrock(
+  modelId: string,
+  source: { rgba: Uint8Array; width: number; height: number },
+  margins: { left: number; right: number; up: number; down: number },
+): Promise<Buffer> {
   const body = JSON.stringify({
-    taskType: 'OUTPAINTING',
-    outPaintingParams: {
-      text: 'Extend the existing background seamlessly to the sides. Keep the same lighting and style. Do not add characters, text, cards, or a frame.',
-      negativeText: 'text, watermark, frame, border, signature, new character',
-      image: fitted.image.toString('base64'),
-      maskImage: fitted.mask.toString('base64'),
-      outPaintingMode: 'DEFAULT',
-    },
-    imageGenerationConfig: {
-      numberOfImages: 1,
-      width: fitted.width,
-      height: fitted.height,
-      cfgScale: 7,
-    },
+    image: encodePng(source.rgba, source.width, source.height).toString('base64'),
+    prompt: 'Extend the existing background seamlessly. Keep the same lighting and style. Do not add characters, text, or a frame.',
+    left: margins.left,
+    right: margins.right,
+    up: margins.up,
+    down: margins.down,
+    creativity: 0.35,
+    output_format: 'png',
   });
   const result = await bedrock.send(new InvokeModelCommand({
     modelId,
@@ -94,33 +84,18 @@ async function outpaintWithBedrock(modelId: string, source: { rgba: Uint8Array; 
     accept: 'application/json',
     body: new TextEncoder().encode(body),
   }));
-  const parsed = JSON.parse(new TextDecoder().decode(result.body)) as { images?: string[] };
-  const image = parsed.images?.[0];
+  const raw = new TextDecoder().decode(result.body);
+  let parsed: { images?: string[]; image?: string; finish_reasons?: Array<string | null> };
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    return Buffer.from(result.body);
+  }
+  const blocked = parsed.finish_reasons?.find((reason) => reason);
+  if (blocked) throw new Error(`Bedrock outpaint was blocked: ${blocked}`);
+  const image = parsed.images?.[0] ?? parsed.image;
   if (!image) throw new Error('Bedrock returned no image');
   return Buffer.from(image, 'base64');
-}
-
-function fitBedrock(source: { rgba: Uint8Array; width: number; height: number }, width: number, height: number) {
-  const snap = (value: number) => Math.max(320, Math.min(1408, Math.round(value / 16) * 16));
-  const nextWidth = snap(width);
-  const nextHeight = snap(height);
-  const extended = extendToAspect(source, nextWidth / nextHeight);
-  const image = encodePng(extended.rgba, extended.width, extended.height);
-  const mask = new PNG({ width: extended.width, height: extended.height });
-  const originX = Math.floor((extended.width - source.width) / 2);
-  const originY = Math.floor((extended.height - source.height) / 2);
-  for (let y = 0; y < extended.height; y += 1) {
-    for (let x = 0; x < extended.width; x += 1) {
-      const inside = x >= originX && x < originX + source.width && y >= originY && y < originY + source.height;
-      const offset = (y * extended.width + x) * 4;
-      const value = inside ? 0 : 255;
-      mask.data[offset] = value;
-      mask.data[offset + 1] = value;
-      mask.data[offset + 2] = value;
-      mask.data[offset + 3] = 255;
-    }
-  }
-  return { image, mask: PNG.sync.write(mask), width: extended.width, height: extended.height };
 }
 
 function encodePng(rgba: Uint8Array, width: number, height: number): Buffer {

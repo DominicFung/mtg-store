@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
-import { extendToAspect, WRAP_ASPECT } from '../../../packages/print-core/src/outpaint';
+import { extendToAspect, outpaintMargins, WRAP_ASPECT } from '../../../packages/print-core/src/outpaint';
 import { profileToSettings, LAUNCH_PROFILES } from './printGeometry';
 
 const settings = profileToSettings(LAUNCH_PROFILES[0]);
@@ -62,4 +62,10 @@ test('edge extend widens a portrait crop to the three-face frame and does not in
   assert.ok(extended.width / extended.height > WRAP_ASPECT - 0.02);
   assert.ok(Math.abs(extended.width / extended.height - WRAP_ASPECT) < 0.02);
   assert.equal(extended.rgba[(Math.floor(extended.height / 2) * extended.width + Math.floor(extended.width / 2)) * 4], 20);
+  const margins = outpaintMargins(40, 50);
+  assert.equal(margins.up, 0);
+  assert.equal(margins.down, 0);
+  assert.ok(margins.left > 0 && margins.right > 0);
+  assert.ok(margins.left <= 2000 && margins.right <= 2000);
+  assert.equal(outpaintMargins(841, 326).left, 0);
 });

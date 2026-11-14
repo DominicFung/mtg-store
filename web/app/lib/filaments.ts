@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Filament, MOCK_FILAMENTS, sortFilaments } from './filamentCatalogue';
+import { publicConfig } from './publicConfig';
 
 const LIST_FILAMENTS = `query ListFilaments {
   listFilaments {
@@ -49,8 +50,8 @@ function normalizeFilament(row: unknown): Filament | null {
 }
 
 export async function fetchFilaments(): Promise<{ filaments: Filament[]; source: FilamentSource }> {
-  const url = process.env.NEXT_PUBLIC_APPSYNC_URL;
-  const apiKey = process.env.NEXT_PUBLIC_APPSYNC_API_KEY;
+  const url = publicConfig.appsyncUrl;
+  const apiKey = publicConfig.appsyncApiKey;
   if (!url || !apiKey) return { filaments: MOCK_FILAMENTS, source: 'mock' };
 
   try {

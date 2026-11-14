@@ -30,6 +30,8 @@ export {
   renderBlendedRgba,
   resolveSmoothPasses,
   shortFilamentName,
+  smoothLuminance,
+  smoothingRadiusPx,
   standardLuminance,
   stretchToUnit,
   TRANSMISSION_DENSITY,

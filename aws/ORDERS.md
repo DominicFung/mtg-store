@@ -30,7 +30,17 @@ AWS_REGION=us-east-1 \
 
 The 0.2 mm profile is the default and is copied onto the existing print-settings row. Border width and border depth are 0. The mesh never extrudes a border.
 
-Set the web env from the stack outputs: `NEXT_PUBLIC_APPSYNC_URL`, `NEXT_PUBLIC_APPSYNC_API_KEY` (the shop key output, not the expired default key), `NEXT_PUBLIC_COGNITO_USER_POOL_ID`, `NEXT_PUBLIC_COGNITO_CLIENT_ID`, `NEXT_PUBLIC_AWS_REGION=us-east-1`.
+The web app reads these at `next build` time. Next inlines `NEXT_PUBLIC_*`, so set them in the Amplify build environment and rebuild. A missing value does not fail the build. `/admin` lists whichever of these were empty:
+
+```bash
+NEXT_PUBLIC_APPSYNC_URL=https://imsyvldjf5b5fj556fasjpedk4.appsync-api.us-east-1.amazonaws.com/graphql
+NEXT_PUBLIC_APPSYNC_API_KEY=<ShopApiKey20261112 output>
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=us-east-1_gObjyRZy0
+NEXT_PUBLIC_COGNITO_CLIENT_ID=58evb4g4qv5b3ue4n7bqaoo2n
+NEXT_PUBLIC_AWS_REGION=us-east-1
+```
+
+`NEXT_PUBLIC_APPSYNC_URL` is the existing GraphQL endpoint. The API key is the shop key output, not the expired default key. `ShopApiKey20261112` expires at epoch `1826204400`, so a later deploy does not replace it.
 
 ## One admin user
 
@@ -68,7 +78,16 @@ Deploy creates an SES email identity and an SNS email subscription for `notifyEm
 
 ## Bedrock outpaint
 
-`outpaintCommanderArt` tries Amazon Nova Canvas (`amazon.nova-canvas-v1:0`) in us-east-1, then Titan Image Generator v2 (`amazon.titan-image-generator-v2:0`). In the Bedrock console, open Model access for us-east-1 and enable those two models before the first commander search against the API. Results are cached in the private order bucket. If the model is not enabled, the Lambda still returns an edge extension so the crop step can continue.
+`outpaintCommanderArt` calls Stability Image Outpaint. The model id is `BEDROCK_IMAGE_MODEL` on the Lambda, set from CDK context `bedrockImageModel`. The default is the US geo profile `us.stability.stable-outpaint-v1:0` (foundation model `stability.stable-outpaint-v1:0`). Override it with `-c bedrockImageModel=...` if AWS publishes a newer id.
+
+Nova Canvas and Titan Image Generator v2 are end of life and are not used. In the Bedrock console for us-east-1, enable Stable Image Outpaint before the first live commander search. The Lambda role may call `bedrock:InvokeModel` on:
+
+- `arn:aws:bedrock:us-east-1:<account>:inference-profile/us.stability.stable-outpaint-v1:0`
+- `arn:aws:bedrock:us-east-1::foundation-model/stability.stable-outpaint-v1:0`
+- `arn:aws:bedrock:us-east-2::foundation-model/stability.stable-outpaint-v1:0`
+- `arn:aws:bedrock:us-west-2::foundation-model/stability.stable-outpaint-v1:0`
+
+The profile routes across those three regions. Results are cached in the private order bucket. If the model is not enabled, or the call fails, the Lambda stores the edge extension instead so the crop step can continue.
 
 ## Payments
 
