@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assertPrintSettings, DEFAULT_PRINT_SETTINGS, fromItem } from './model';
+import { assertPrintSettings, DEFAULT_PRINT_SETTINGS, fromItem } from './model.ts';
 
 test('a row written before the colour-core fields still loads, with the new defaults', () => {
   const loaded = fromItem({
