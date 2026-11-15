@@ -64,7 +64,7 @@ export default function AdminPage() {
 
   if (!signedIn && !preview) {
     return (
-      <main className="min-h-screen bg-[#12182c] px-4 py-10 text-white">
+      <main className="min-h-full bg-[#12182c] px-4 py-10 text-white">
         <form onSubmit={(event) => { void signIn(event); }} className="mx-auto max-w-md space-y-3 rounded-xl border border-white/10 bg-black/30 p-6">
           <h1 className="text-2xl font-bold text-[#e2c275]">Shop admin</h1>
           <p className="text-sm text-gray-300">Dominic only. The user pool does not allow public sign-up, and every admin mutation checks the admin group.</p>
@@ -94,7 +94,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#12182c] px-4 py-6 text-white">
+    <main className="min-h-full bg-[#12182c] px-4 py-6 text-white">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-[#e2c275]">Orders</h1>

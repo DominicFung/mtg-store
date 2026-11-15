@@ -23,7 +23,7 @@ export default function ReceiptClient() {
   }, [orderNumber, email]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#1a1a2e] to-[#16213e] px-4 py-8 text-white">
+    <main className="min-h-full bg-gradient-to-b from-[#1a1a2e] to-[#16213e] px-4 py-8 text-white">
       <div className="mx-auto max-w-3xl">
         <p className="text-sm text-[#e2c275]">The Mana Ramp</p>
         <h1 className="mt-1 text-3xl font-bold">Commander Deck Box receipt</h1>

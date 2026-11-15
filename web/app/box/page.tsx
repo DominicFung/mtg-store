@@ -261,7 +261,7 @@ export default function Home() {
   }, [layerCount, layers.length]);
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-gradient-to-b from-[#1a1a2e] to-[#16213e] font-serif text-white">
+    <div className="min-h-full overflow-x-clip bg-gradient-to-b from-[#1a1a2e] to-[#16213e] font-serif text-white">
       <div className="mx-auto w-full max-w-6xl px-4 py-4 pb-28 sm:px-8 sm:py-8">
         <header className="mb-4 text-center sm:mb-6">
           <h1 className="text-2xl font-bold tracking-wide text-[#e2c275] sm:text-4xl">Commander Deck Box</h1>
