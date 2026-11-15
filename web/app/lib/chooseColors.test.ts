@@ -53,7 +53,54 @@ test('a red plate keeps red in the stack instead of painting it blue', () => {
     count: 3,
   });
   assert.ok(choice.ids.includes('red'));
+  assert.equal(new Set(choice.ids).size, choice.ids.length);
   assert.ok(choice.ids.filter((id) => id === 'blue').length < choice.ids.length);
+});
+
+test('a blue plate with small yellow and orange accents keeps those hues, once each, dark base first', () => {
+  const shop = [
+    { id: 'black', name: 'Black', hex: '#161616', td: 0.5, inStock: true },
+    { id: 'blue', name: 'Dark Blue', hex: '#1A3E78', td: 1.2, inStock: true },
+    { id: 'gray', name: 'Gray', hex: '#8E9297', td: 2.4, inStock: true },
+    { id: 'beige', name: 'Beige', hex: '#E6D5B8', td: 4.4, inStock: true },
+    { id: 'oak', name: 'Oak', hex: '#C49A6C', td: 1.6, inStock: true },
+    { id: 'yellow', name: 'Yellow', hex: '#F6D32A', td: 6.2, inStock: true },
+    { id: 'orange', name: 'Orange', hex: '#E07A1F', td: 3.8, inStock: true },
+    { id: 'red', name: 'Red', hex: '#D4252B', td: 3.4, inStock: true },
+  ];
+  const choice = chooseColorCore({
+    rgba: solid(64, 64, (x, y) => {
+      if (x >= 50 && y < 14) return [246, 200, 40];
+      if (x >= 48 && y >= 18 && y < 32) return [220, 110, 30];
+      if (x < 10 && y > 48) return [8, 10, 16];
+      return [12, 40, 110];
+    }),
+    width: 64,
+    height: 64,
+    filaments: shop,
+    settings,
+    count: 6,
+  });
+  assert.equal(new Set(choice.ids).size, choice.ids.length);
+  assert.ok(choice.ids.includes('yellow'), `missing yellow in ${choice.ids.join(', ')}`);
+  assert.ok(choice.ids.includes('orange'), `missing orange in ${choice.ids.join(', ')}`);
+  assert.ok(choice.ids.includes('blue'), `missing blue in ${choice.ids.join(', ')}`);
+  const luma = (id: string) => {
+    const filament = shop.find((entry) => entry.id === id);
+    assert.ok(filament);
+    const hex = filament.hex.replace('#', '');
+    const value = Number.parseInt(hex, 16);
+    const red = (value >> 16) & 255;
+    const green = (value >> 8) & 255;
+    const blue = value & 255;
+    return (0.299 * red + 0.587 * green + 0.114 * blue) / 255 + Math.min(12, filament.td) * 0.012;
+  };
+  const scores = choice.ids.map(luma);
+  for (let index = 1; index < scores.length; index += 1) {
+    assert.ok(scores[index] + 1e-6 >= scores[index - 1], `order ${choice.ids.join(', ')}`);
+  }
+  assert.ok(choice.ids.indexOf('yellow') > choice.ids.indexOf('blue'));
+  assert.equal(choice.endLayers[choice.endLayers.length - 1], 50);
 });
 
 test('edge extend widens a portrait crop to the three-face frame and does not invent a border mesh', () => {

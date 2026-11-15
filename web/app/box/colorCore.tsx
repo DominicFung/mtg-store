@@ -1,14 +1,14 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { GripVertical, Plus, X } from 'lucide-react';
 import { Filament, filamentsAreApproximate } from '../lib/filamentCatalogue';
 import {
-  colorAtLayer,
   clampStops,
   formatSwapDepth,
   hexToRgb,
   insertStop,
+  layerPalette,
   layerTopMm,
   moveStop,
   removeStop,
@@ -58,21 +58,10 @@ export default function ColorCore({
   const suppressClick = useRef(false);
   const [ghost, setGhost] = useState<{ name: string; hex: string; x: number; y: number } | null>(null);
 
+  const listRef = useRef<HTMLOListElement>(null);
   const safeStops = useMemo(() => clampStops(stops, layerCount), [stops, layerCount]);
   const core = useMemo(() => toStops(layers, safeStops), [layers, safeStops]);
-  const colors = useMemo(
-    () => Array.from({ length: layerCount }, (_, index) => colorAtLayer(index + 1, core, settings)),
-    [core, layerCount, settings],
-  );
-  const gradient = useMemo(() => {
-    const bands = colors.map((color, index) => {
-      const start = (index / layerCount) * 100;
-      const end = ((index + 1) / layerCount) * 100;
-      const rgb = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-      return `${rgb} ${start.toFixed(2)}%, ${rgb} ${end.toFixed(2)}%`;
-    });
-    return `linear-gradient(to top, ${bands.join(', ')})`;
-  }, [colors, layerCount]);
+  const colors = useMemo(() => layerPalette(core, settings, layerCount), [core, settings, layerCount]);
 
   const approximate = filamentsAreApproximate(filaments);
   const selected = filaments.find((filament) => filament.id === selectedId) ?? null;
@@ -103,6 +92,68 @@ export default function ColorCore({
       layers.filter((_, layerIndex) => layerIndex !== index),
       removeStop(safeStops, index),
     );
+  };
+
+  const moveLayer = (from: number, to: number) => {
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
+    if (from < 0 || to < 0 || from >= layers.length || to >= layers.length) return;
+    const next = layers.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    commit(next, safeStops);
+  };
+
+  const rowIndexAt = (clientY: number) => {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>('[data-stop-index]');
+    if (!rows || rows.length === 0) return null;
+    let best: number | null = null;
+    let bestDistance = Infinity;
+    rows.forEach((row) => {
+      const rect = row.getBoundingClientRect();
+      const distance = Math.abs(clientY - (rect.top + rect.height / 2));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = Number(row.getAttribute('data-stop-index'));
+      }
+    });
+    return best;
+  };
+
+  const startReorder = (event: React.PointerEvent<HTMLButtonElement>, modelIndex: number) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startY = event.clientY;
+    const filament = layers[modelIndex];
+    let dragging = false;
+    handle.setPointerCapture(pointerId);
+    const end = (clientY: number) => {
+      if (dragging) {
+        const target = rowIndexAt(clientY);
+        if (target !== null) moveLayer(modelIndex, target);
+      }
+      setGhost(null);
+      setOverIndex(null);
+    };
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!dragging && Math.abs(ev.clientY - startY) < 6) return;
+      dragging = true;
+      setGhost({ name: filament?.name ?? 'Filament', hex: filament?.hex ?? '#888', x: ev.clientX, y: ev.clientY });
+      setOverIndex(rowIndexAt(ev.clientY));
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      end(ev.clientY);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
   };
 
   const layerFromClientY = (clientY: number) => {
@@ -157,7 +208,7 @@ export default function ColorCore({
       <div>
         <h3 className="text-lg font-semibold text-[#e2c275]">Colour core</h3>
         <p className="mt-1 text-sm text-gray-300">
-          {layerCount} layers, from the base up to the top slider. Drag a stop to choose where that filament ends. Brighter parts of the picture print taller, so they show the colours higher in the core.
+          {layerCount} layers. Brighter parts print taller and show the colours higher in the core. A low transmission distance covers the filament underneath immediately; a higher TD takes more layers to reach full colour, on this slider and in the print.
         </p>
         {approximate && (
           <p className="mt-2 text-xs text-amber-200/90">
@@ -171,12 +222,11 @@ export default function ColorCore({
         </p>
       </div>
 
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-3">
         <div className="flex shrink-0 items-stretch gap-2">
           <div
             ref={barRef}
-            className="relative h-[28rem] w-14 touch-none rounded-md border border-cyan-300/80"
-            style={{ backgroundImage: gradient }}
+            className="relative h-80 w-14 touch-none rounded-md border border-cyan-300/80 md:h-[28rem]"
             onPointerDown={(event) => {
               if ((event.target as HTMLElement).closest('[data-stop-handle]')) return;
               const layer = layerFromClientY(event.clientY);
@@ -204,6 +254,17 @@ export default function ColorCore({
               dragStop.current = null;
             }}
           >
+            <div className="absolute inset-0 overflow-hidden rounded-[5px]" aria-hidden>
+              <div className="flex h-full flex-col-reverse">
+              {colors.map((color, index) => (
+                <div
+                  key={`layer-${index}`}
+                  className="min-h-0 flex-1"
+                  style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
+                />
+              ))}
+              </div>
+            </div>
             {safeStops.map((stop, index) => (
               <div
                 key={`${layers[index]?.id ?? 'stop'}-${index}`}
@@ -226,7 +287,7 @@ export default function ColorCore({
               </div>
             ))}
           </div>
-          <div className="relative h-[28rem] w-16 text-[10px] text-gray-300">
+          <div className="relative h-80 w-16 text-[10px] text-gray-300 md:h-[28rem]">
             {safeStops.map((stop, index) => (
               <span
                 key={`label-${index}`}
@@ -242,7 +303,7 @@ export default function ColorCore({
 
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Printed first at the top of this list</p>
+            <p className="text-xs uppercase tracking-wide text-gray-400">Same order as the slider. Drag to reorder.</p>
             <button
               type="button"
               onClick={addStop}
@@ -253,16 +314,18 @@ export default function ColorCore({
               Add stop
             </button>
           </div>
-          <ol className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
-            {layers.map((filament, modelIndex) => {
+          <ol ref={listRef} className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+            {[...layers.keys()].reverse().map((modelIndex) => {
+              const filament = layers[modelIndex];
               const endLayer = safeStops[modelIndex];
+              if (!filament) return null;
               return (
                 <li
                   key={`${filament.id}-${modelIndex}`}
                   data-stop-index={modelIndex}
                   onDragOver={(event) => {
                     event.preventDefault();
-                    setOverIndex(modelIndex);
+                    if (dragRef.current?.kind === 'filament') setOverIndex(modelIndex);
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
@@ -273,10 +336,24 @@ export default function ColorCore({
                     const picked = filaments.find((item) => item.id === filamentId);
                     if (picked) assign(modelIndex, picked);
                   }}
-                  className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
+                  className={`flex items-center gap-1 rounded-md border px-1.5 py-1.5 ${
                     overIndex === modelIndex ? 'border-[#e2c275] bg-white/10' : 'border-white/10 bg-black/20'
                   }`}
                 >
+                  <button
+                    type="button"
+                    aria-label={`Reorder ${filament.name}`}
+                    onPointerDown={(event) => startReorder(event, modelIndex)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                      event.preventDefault();
+                      const direction = event.key === 'ArrowUp' ? 1 : -1;
+                      moveLayer(modelIndex, Math.min(layers.length - 1, Math.max(0, modelIndex + direction)));
+                    }}
+                    className="grid h-11 w-11 shrink-0 cursor-grab touch-none place-items-center text-gray-400 active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-5 w-5" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => {

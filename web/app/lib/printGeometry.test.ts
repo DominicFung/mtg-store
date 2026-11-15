@@ -247,6 +247,21 @@ test('catalogue product names shorten to the colour, and a missing type is PLA',
   assert.doesNotMatch(text, /mixed filament types/);
 });
 
+test('a low TD covers on the next layer and a high TD is still mixed', () => {
+  const under = stop('PLA', 'Test', 'Black', 0.2, 10, '#101010');
+  const opaque = stop('PLA', 'Test', 'Red', 0.04, 40, '#E02020');
+  const glassy = stop('PLA', 'Test', 'Red', 8, 40, '#E02020');
+  const snapped = colorAtLayer(11, [under, opaque], settings);
+  const firstGlaze = colorAtLayer(11, [under, glassy], settings);
+  const laterGlaze = colorAtLayer(40, [under, glassy], settings);
+  assert.ok(snapped[0] > 200, `low TD should already be red, got ${snapped}`);
+  assert.ok(firstGlaze[0] < 90, `high TD should still show the base, got ${firstGlaze}`);
+  assert.ok(laterGlaze[0] > firstGlaze[0] + 80, `high TD should arrive by the end of its range, got ${laterGlaze}`);
+  const midLayer = colorAtLayer(20, [under, glassy], settings);
+  const linearMid = firstGlaze[0] + (laterGlaze[0] - firstGlaze[0]) * (9 / 29);
+  assert.ok(midLayer[0] > linearMid + 15, `Beer-Lambert should front-load the blend, got ${midLayer[0]} vs linear ${linearMid}`);
+});
+
 test('density 10 reaches the Brigid ice-blue slider; density 1 does not', () => {
   const atSlider = colorAtLayer(35, brigidStops, settings);
   assert.ok(Math.abs(atSlider[0] - 139) < 20, `red ${atSlider[0]}`);

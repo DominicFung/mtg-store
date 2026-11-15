@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { CartProvider } from './lib/useCart';
 import AppBar from "./components/appBar";
+import SiteFooter from "./components/siteFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +17,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Mana Ramp",
-  description: "Commander Deck Boxes printed by The Mana Ramp",
+  metadataBase: new URL("https://themanaramp.ca"),
+  title: {
+    default: "The Mana Ramp",
+    template: "%s · The Mana Ramp",
+  },
+  description: "3D-printed Commander deck boxes for Magic: The Gathering. Search your commander, we print the box.",
+  openGraph: {
+    title: "The Mana Ramp",
+    description: "3D-printed Commander deck boxes for Magic: The Gathering.",
+    siteName: "The Mana Ramp",
+    type: "website",
+    url: "https://themanaramp.ca",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "The Mana Ramp",
+    description: "3D-printed Commander deck boxes for Magic: The Gathering.",
+  },
 };
 
 export default function RootLayout({
@@ -28,11 +45,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
       >
         <CartProvider>
           <AppBar />
-          {children}
+          <div className="flex-1">{children}</div>
+          <SiteFooter />
         </CartProvider>
       </body>
     </html>

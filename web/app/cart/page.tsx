@@ -6,7 +6,7 @@ export default function CartPage() {
   const { items, removeItem, clearCart } = useCart();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a1a2e] to-[#16213e] p-8 text-white">
+    <div className="min-h-full bg-gradient-to-b from-[#1a1a2e] to-[#16213e] p-4 text-white sm:p-8">
       <h1 className="mb-4 text-3xl font-bold">Your Cart</h1>
       {items.length === 0 ? (
         <p>Your cart is empty.</p>

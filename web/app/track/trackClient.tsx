@@ -35,7 +35,7 @@ export default function TrackClient() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#1a1a2e] to-[#16213e] px-4 py-8 text-white">
+    <main className="min-h-full bg-gradient-to-b from-[#1a1a2e] to-[#16213e] px-4 py-8 text-white">
       <div className="mx-auto max-w-xl">
         <h1 className="text-3xl font-bold text-[#e2c275]">Track a Commander Deck Box</h1>
         <p className="mt-2 text-sm text-gray-300">Use the order number from the receipt and the email you ordered with. The number alone is not enough.</p>
