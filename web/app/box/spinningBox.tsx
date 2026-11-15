@@ -1,11 +1,11 @@
 'use client';
 
-import React, { Suspense, useEffect, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { decodeBinaryStl, type Triangle } from '../../../packages/print-core/src/printGeometry';
-import { buildLidTextMesh, lidLocalToGlb, lidSlideOffset, splitLid } from '../../../packages/print-core/src/lidGeometry';
+import { buildLidTextMesh, LID_FONT_FILE, LID_SIZE, lidLocalToGlb, lidSlideOffset, splitLid } from '../../../packages/print-core/src/lidGeometry';
 
 interface Props {
   textures: [string, string, string];
@@ -14,15 +14,41 @@ interface Props {
   logoColor: string;
   textColor: string;
   lidName: string;
-  /** 0 is closed, 1 is slid open toward the notch. */
+  /** 0 is closed, 1 is slid open toward the card window. */
   lidOpen: number;
+  /** Posed camera for the orientation check. Omitted in the shop. */
+  shot?: string | null;
 }
 
 const FACE_TEXTURE_INDEX: Record<string, number> = {
-  Face3: 0,
-  Face2: 1,
-  Face1: 2,
+  Face3: 0, // left side, when the card window faces you
+  Face2: 1, // spine, moved onto the back
+  Face1: 2, // right side
 };
+
+const SHOTS: Record<string, { position: [number, number, number]; target: [number, number, number]; up?: [number, number, number] }> = {
+  front: { position: [0, 62, -128], target: [0, 2, -8] },
+  left: { position: [150, 22, -8], target: [0, 6, -6] },
+  right: { position: [-150, 22, -8], target: [0, 6, -6] },
+  back: { position: [0, 36, 150], target: [0, 6, 8] },
+  top: { position: [0, 170, 0], target: [0, 0, -4], up: [0, 0, 1] },
+  open: { position: [46, 86, -168], target: [2, 8, -18] },
+};
+
+/** The spine plate ships on the window. Park it on the back, still reading upright. */
+function orientDeckBox(scene: THREE.Object3D) {
+  if (scene.userData.lidOriented) return;
+  const shell = scene.getObjectByName('edh_box') as THREE.Mesh | undefined;
+  const spine = scene.getObjectByName('Face2');
+  if (!shell?.geometry || !spine) return;
+  shell.geometry.computeBoundingBox();
+  const bounds = shell.geometry.boundingBox;
+  if (!bounds) return;
+  const proud = bounds.min.z - spine.position.z;
+  spine.position.z = bounds.max.z + proud;
+  spine.rotation.y = Math.PI;
+  scene.userData.lidOriented = true;
+}
 
 function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMaterial) {
   const previous = mesh.material;
@@ -33,13 +59,17 @@ function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMateri
   }
 }
 
-function geometryFromTriangles(triangles: readonly Triangle[]): THREE.BufferGeometry {
+function geometryFromTriangles(triangles: readonly Triangle[], mirrorX = false): THREE.BufferGeometry {
   const positions = new Float32Array(triangles.length * 9);
   triangles.forEach((triangle, index) => {
-    // STL Y becomes scene Z. That swap mirrors the winding, so vertex 1 and 2 trade places.
-    const [a, c, b] = triangle.verts;
-    [a, b, c].forEach((vert, vertex) => {
-      const [x, y, z] = lidLocalToGlb(vert[0], vert[1], vert[2]);
+    // STL Y becomes scene Z, which mirrors the shell. The name is authored to read
+    // on the printed lid, so the preview mirrors it back across the lid.
+    const verts = mirrorX
+      ? triangle.verts
+      : [triangle.verts[0], triangle.verts[2], triangle.verts[1]] as const;
+    verts.forEach((vert, vertex) => {
+      const localX = mirrorX ? LID_SIZE.width - vert[0] : vert[0];
+      const [x, y, z] = lidLocalToGlb(localX, vert[1], vert[2]);
       const offset = index * 9 + vertex * 3;
       positions[offset] = x;
       positions[offset + 1] = y;
@@ -82,7 +112,7 @@ function LidMeshes({
         if (!response.ok) throw new Error('lid');
         return response.arrayBuffer();
       }),
-      fetch('/fonts/Oswald-Bold.ttf').then((response) => {
+      fetch(`/fonts/${LID_FONT_FILE}`).then((response) => {
         if (!response.ok) throw new Error('font');
         return response.arrayBuffer();
       }),
@@ -122,7 +152,7 @@ function LidMeshes({
       try {
         const mesh = buildLidTextMesh(fontBuffer, cleaned);
         if (cancelled) return;
-        setTextGeometry(mesh.length > 0 ? geometryFromTriangles(mesh) : null);
+        setTextGeometry(mesh.length > 0 ? geometryFromTriangles(mesh, true) : null);
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -155,10 +185,10 @@ function LidMeshes({
   );
 }
 
-function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidName, lidOpen }: Props) {
+function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidName, lidOpen, shot }: Props) {
   const modelRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF(glbPath);
-  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotate, setAutoRotate] = useState(!shot);
   const [maps, setMaps] = useState<(THREE.Texture | null)[]>([null, null, null]);
   const requestId = useRef(0);
   const activeMaps = useRef<(THREE.Texture | null)[]>([]);
@@ -208,6 +238,11 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
   }, []);
 
   useEffect(() => {
+    if (shot) setAutoRotate(false);
+  }, [shot]);
+
+  useEffect(() => {
+    orientDeckBox(scene);
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -241,7 +276,7 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
   }, [scene, maps, boxColor]);
 
   useFrame((_, delta) => {
-    if (autoRotate && modelRef.current) {
+    if (autoRotate && !shot && modelRef.current) {
       modelRef.current.rotation.y += delta * 0.5;
     }
   });
@@ -262,6 +297,24 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
 
 useGLTF.preload('/models/edh_box_v1.glb');
 
+function ShotCamera({ shot }: { shot: string }) {
+  const camera = useThree((state) => state.camera);
+  const controls = useThree((state) => state.controls) as { target: THREE.Vector3; update: () => void } | null;
+  useLayoutEffect(() => {
+    const spec = SHOTS[shot];
+    if (!spec) return;
+    camera.up.set(...(spec.up ?? [0, 1, 0]));
+    camera.position.set(...spec.position);
+    camera.lookAt(...spec.target);
+    camera.updateProjectionMatrix();
+    if (controls?.target) {
+      controls.target.set(...spec.target);
+      controls.update();
+    }
+  }, [camera, controls, shot]);
+  return null;
+}
+
 export default function SpinningBoxWithTextures({
   textures,
   glbPath,
@@ -270,6 +323,7 @@ export default function SpinningBoxWithTextures({
   textColor,
   lidName,
   lidOpen,
+  shot,
 }: Props) {
   return (
     <div className="relative mx-auto aspect-square w-full min-w-0 max-w-[640px]">
@@ -300,8 +354,10 @@ export default function SpinningBoxWithTextures({
             textColor={textColor}
             lidName={lidName}
             lidOpen={lidOpen}
+            shot={shot}
           />
         </Suspense>
+        {shot && <ShotCamera shot={shot} />}
         <OrbitControls target={[0, 6, -8]} enablePan={false} minDistance={42} maxDistance={320} />
       </Canvas>
     </div>

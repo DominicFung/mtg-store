@@ -32,7 +32,7 @@ function assertSpanOnFace(
   crop: { x: number; y: number; width: number; height: number },
   left: number,
   right: number,
-  face: 'front' | 'back',
+  face: 'left' | 'right',
 ) {
   assert.equal(faceAtX(crop, (left + right) / 2), face);
   assert.equal(faceAtX(crop, left + 0.5), face);
@@ -40,7 +40,7 @@ function assertSpanOnFace(
   assert.notEqual(faceAtX(crop, (left + right) / 2), 'spine');
 }
 
-test('a subject on the left is extended only to the right and lands on the front', () => {
+test('a subject on the left is extended only to the right and lands on the left face', () => {
   const image = disk(80, 58, 18, 29, 8);
   const bounds = subjectBounds(image);
   assert.ok(bounds.center < 0.4, `expected a left centre, got ${bounds.center}`);
@@ -57,10 +57,10 @@ test('a subject on the left is extended only to the right and lands on the front
   assert.equal(extended.height, image.height);
   assert.ok(extended.width / extended.height + 0.02 >= WRAP_ASPECT);
   const crop = defaultCropBox(extended.width, extended.height, subjectBounds(extended));
-  assertSpanOnFace(crop, 18 - 8, 18 + 8, 'front');
+  assertSpanOnFace(crop, 18 - 8, 18 + 8, 'left');
 });
 
-test('a subject on the right is extended only to the left and lands on the back', () => {
+test('a subject on the right is extended only to the left and lands on the right face', () => {
   const image = disk(80, 58, 62, 29, 8);
   const bounds = subjectBounds(image);
   assert.ok(bounds.center > 0.6, `expected a right centre, got ${bounds.center}`);
@@ -75,10 +75,10 @@ test('a subject on the right is extended only to the left and lands on the back'
   const extended = extendToAspect(image, WRAP_ASPECT);
   const added = extended.width - image.width;
   const crop = defaultCropBox(extended.width, extended.height, subjectBounds(extended));
-  assertSpanOnFace(crop, added + 62 - 8, added + 62 + 8, 'back');
+  assertSpanOnFace(crop, added + 62 - 8, added + 62 + 8, 'right');
 });
 
-test('a centred subject is kept on the front face, not the spine', () => {
+test('a centred subject is kept on the left face, not the spine', () => {
   const image = disk(80, 58, 40, 29, 10);
   const bounds = subjectBounds(image);
   assert.ok(Math.abs(bounds.center - 0.5) < 0.08, `expected a centred figure, got ${bounds.center}`);
@@ -92,7 +92,7 @@ test('a centred subject is kept on the front face, not the spine', () => {
 
   const extended = extendToAspect(image, WRAP_ASPECT, 'right');
   const crop = defaultCropBox(extended.width, extended.height, subjectBounds(extended));
-  assertSpanOnFace(crop, 40 - 10, 40 + 10, 'front');
+  assertSpanOnFace(crop, 40 - 10, 40 + 10, 'left');
 });
 
 test('the default crop pulls a near-centre subject off the spine', () => {
@@ -100,17 +100,17 @@ test('the default crop pulls a near-centre subject off the spine', () => {
   const leftish = subjectBounds(wide);
   assert.ok(leftish.center < 0.5);
   const frontCrop = defaultCropBox(wide.width, wide.height, leftish);
-  assert.equal(faceAtX(frontCrop, 180), 'front');
+  assert.equal(faceAtX(frontCrop, 180), 'left');
 
   const rightWide = disk(400, 100, 220, 50, 12);
   const rightish = subjectBounds(rightWide);
   assert.ok(rightish.center > 0.5);
   const backCrop = defaultCropBox(rightWide.width, rightWide.height, rightish);
-  assert.equal(faceAtX(backCrop, 220), 'back');
+  assert.equal(faceAtX(backCrop, 220), 'right');
 
   const centred: SubjectBounds = { left: 0.46, right: 0.54, center: 0.5 };
   const centredCrop = defaultCropBox(400, 100, centred);
-  assert.equal(faceAtX(centredCrop, 200), 'front');
+  assert.equal(faceAtX(centredCrop, 200), 'left');
   assert.notEqual(faceAtX(centredCrop, 200), 'spine');
 });
 
@@ -127,5 +127,5 @@ test('flip side extends the opposite edge and parks the subject on the other fac
     right: (added + 26) / flipped.width,
     center: (added + 18) / flipped.width,
   });
-  assertSpanOnFace(crop, added + 10, added + 26, 'back');
+  assertSpanOnFace(crop, added + 10, added + 26, 'right');
 });

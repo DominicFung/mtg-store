@@ -12,17 +12,18 @@ import {
 } from '../../../packages/print-core/src/hueforge';
 import {
   buildFaceMesh,
+  canonicalFaceName,
   FACE_NAMES,
   modelSizeForCrop,
   clampToMaxWidth,
-  type FaceName,
   type PrintSettings,
 } from '../../../packages/print-core/src/printGeometry';
 
 const RECORD_EDGE = 1400;
 
 export type ArchiveFace = {
-  name: FaceName;
+  /** Current name, or a legacy "front" / "back" key from an older order. */
+  name: string;
   rgba: Uint8Array;
   width: number;
   height: number;
@@ -84,6 +85,8 @@ export async function buildOrderZip(input: {
   const faces: Array<Record<string, unknown>> = [];
 
   for (const face of input.faces) {
+    const faceName = canonicalFaceName(face.name);
+    if (!faceName) throw new Error(`Unknown face ${face.name}`);
     const fitted = clampToMaxWidth(
       modelSizeForCrop(face.width, face.height, input.settings.height),
       input.settings.maxWidth,
@@ -97,9 +100,9 @@ export async function buildOrderZip(input: {
       header: 'HueForge',
       maxTriangles: Number.POSITIVE_INFINITY,
     });
-    const project = `${input.orderNumber}-${face.name}.hfp`;
-    zip.file(`${face.name}.stl`, mesh.stl);
-    zip.file(`${face.name}-details.txt`, formatDetails({
+    const project = `${input.orderNumber}-${faceName}.hfp`;
+    zip.file(`${faceName}.stl`, mesh.stl);
+    zip.file(`${faceName}-details.txt`, formatDetails({
       projectName: project,
       widthMm: fitted.widthMm,
       heightMm: fitted.heightMm,
@@ -116,13 +119,13 @@ export async function buildOrderZip(input: {
       stops: input.stops,
       settings: input.settings,
     });
-    zip.file(`crop-${FACE_NAMES.indexOf(face.name) + 1}.png`, face.cropPng);
-    zip.file(`layered-${FACE_NAMES.indexOf(face.name) + 1}.png`, encodePng(blended, preview.width, preview.height));
+    zip.file(`crop-${FACE_NAMES.indexOf(faceName) + 1}.png`, face.cropPng);
+    zip.file(`layered-${FACE_NAMES.indexOf(faceName) + 1}.png`, encodePng(blended, preview.width, preview.height));
     faces.push({
-      face: face.name,
+      face: faceName,
       project,
-      stl: `${face.name}.stl`,
-      details: `${face.name}-details.txt`,
+      stl: `${faceName}.stl`,
+      details: `${faceName}-details.txt`,
       widthMm: fitted.widthMm,
       heightMm: fitted.heightMm,
       meshWidthMm: mesh.widthMm,

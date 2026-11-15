@@ -7,15 +7,17 @@ import {
   boundaryEdgeCount,
   buildLidTextMesh,
   EMBOSS_MM,
+  LID_FONT_FILE,
   LID_SIZE,
   normalizeLidText,
   PLATE_TOP_MM,
   splitLid,
 } from '../../../packages/print-core/src/lidGeometry';
+import { canonicalFaceName } from '../../../packages/print-core/src/printGeometry';
 
 const assets = join(__dirname, 'assets');
 const lidBytes = new Uint8Array(readFileSync(join(assets, 'Lid.stl')));
-const fontFile = readFileSync(join(assets, 'Oswald-Bold.ttf'));
+const fontFile = readFileSync(join(assets, LID_FONT_FILE));
 const font = fontFile.buffer.slice(fontFile.byteOffset, fontFile.byteOffset + fontFile.byteLength) as ArrayBuffer;
 
 test('the lid splits into a flat base and the raised spark', () => {
@@ -37,7 +39,7 @@ test('the lid splits into a flat base and the raised spark', () => {
   assert.ok(closed.spark.length > open.spark.length);
 });
 
-test('the name is a 1 mm emboss centred on the flat band and readable from the notch', () => {
+test('the name is a 1 mm emboss centred on the flat band and reads from the window toward the spark', () => {
   const mesh = buildLidTextMesh(font, 'Dom Fungus');
   assert.ok(mesh.length > 20);
   const bounds = triangleBounds(mesh);
@@ -57,6 +59,24 @@ test('the name is a 1 mm emboss centred on the flat band and readable from the n
   assert.ok(wideBounds.max[0] - wideBounds.min[0] <= 58.1);
   assert.ok(wideBounds.min[1] > 6 && wideBounds.max[1] < 31);
   assert.equal(buildLidTextMesh(font, '   ').length, 0);
+  assert.ok(buildLidTextMesh(font, "O'Brien & Co. 2").length > 20);
+  assert.equal(buildLidTextMesh(font, '+').length, 0);
+
+  const nCount = buildLidTextMesh(font, 'N').length;
+  const oCount = buildLidTextMesh(font, 'O').length;
+  const pair = buildLidTextMesh(font, 'NO');
+  const centers = pair.map((triangle) => (triangle.verts[0][0] + triangle.verts[1][0] + triangle.verts[2][0]) / 3).sort((a, b) => a - b);
+  let gapAt = centers[0];
+  let gap = 0;
+  for (let index = 1; index < centers.length; index += 1) {
+    const span = centers[index] - centers[index - 1];
+    if (span > gap) {
+      gap = span;
+      gapAt = (centers[index] + centers[index - 1]) / 2;
+    }
+  }
+  const leftCount = pair.filter((triangle) => (triangle.verts[0][0] + triangle.verts[1][0] + triangle.verts[2][0]) / 3 < gapAt).length;
+  assert.ok(Math.abs(leftCount - nCount) < Math.abs(leftCount - oCount), `N should be the left letter, ${leftCount} vs N ${nCount} O ${oCount}`);
 });
 
 test('lid names are optional and capped at 20 characters', () => {
@@ -64,5 +84,14 @@ test('lid names are optional and capped at 20 characters', () => {
   assert.equal(normalizeLidText(''), '');
   assert.equal(normalizeLidText(null), '');
   assert.throws(() => normalizeLidText('this name is too long'), /20/);
-  assert.throws(() => normalizeLidText('no_underscores'), /punctuation/);
+  assert.throws(() => normalizeLidText('no_underscores'), /letters/);
+  assert.throws(() => normalizeLidText('A+B'), /letters/);
+});
+
+test('older face keys still name the left and right plates', () => {
+  assert.equal(canonicalFaceName('front'), 'left');
+  assert.equal(canonicalFaceName('back'), 'right');
+  assert.equal(canonicalFaceName('left'), 'left');
+  assert.equal(canonicalFaceName('spine'), 'spine');
+  assert.equal(canonicalFaceName('nope'), null);
 });

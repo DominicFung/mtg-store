@@ -60,6 +60,7 @@ export default function Home() {
   const [textFilamentId, setTextFilamentId] = useState(DEFAULT_TEXT_FILAMENT_ID);
   const [lidName, setLidName] = useState('');
   const [lidOpen, setLidOpen] = useState(0);
+  const [shot, setShot] = useState<string | null>(null);
   const { filaments, source } = useFilaments();
   const { settings: fallbackSettings } = usePrintSettings();
   const layersRef = useRef(layers);
@@ -112,6 +113,40 @@ export default function Home() {
   }, [step]);
 
   useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const nextShot = query.get('shot');
+    if (!nextShot) return;
+    setShot(nextShot);
+    setStep(3);
+    setPreviewReady(true);
+    setLidName(query.get('name') || 'Dom Fungus');
+    const open = query.get('open');
+    setLidOpen(nextShot === 'open' ? 0.72 : open ? Number(open) : 0);
+    const paint = (label: string, fill: string, width: number) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = 326;
+      const context = canvas.getContext('2d');
+      if (!context) return '';
+      context.fillStyle = fill;
+      context.fillRect(0, 0, width, 326);
+      context.fillStyle = '#f4f1e8';
+      context.font = 'bold 72px sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(label, width / 2, 163);
+      return canvas.toDataURL('image/png');
+    };
+    setCrops([
+      paint('LEFT', '#8f2d2a', 293),
+      paint('SPINE', '#c4a15a', 255),
+      paint('RIGHT', '#2a4f8f', 293),
+    ]);
+    setLayered(['', '', '']);
+  }, []);
+
+  useEffect(() => {
+    if (shot) return;
     if (!crops[0] || layers.length === 0) {
       setLayered((current) => (current[0] ? ['', '', ''] as [string, string, string] : current));
       return;
@@ -130,7 +165,7 @@ export default function Home() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [crops, layers, stops, settings]);
+  }, [crops, layers, stops, settings, shot]);
 
   useEffect(() => {
     if (!crops[0]) {
@@ -214,7 +249,7 @@ export default function Home() {
         {flipping ? 'Extending the other side…' : 'Flip side'}
       </button>
       <span className="text-xs text-gray-400">
-        {extendSide === 'left' ? 'Extended on the left, subject on the back.' : 'Extended on the right, subject on the front.'}
+        {extendSide === 'left' ? 'Extended on the left, subject on the right.' : 'Extended on the right, subject on the left.'}
       </span>
       {flipError && <span className="text-xs text-red-300">{flipError}</span>}
     </div>
@@ -347,7 +382,7 @@ export default function Home() {
           <div>
             <h2 className="text-lg font-semibold text-[#e2c275]">Crop to the box faces</h2>
             <p className="mt-1 text-sm text-gray-300">
-              Drag the frame and the gold corners. It stays at the three-face ratio: front, spine, then back.
+              Drag the frame and the gold corners. It stays at the three-face ratio: left, spine, then right.
             </p>
             {image ? (
               <ImageCropper
@@ -399,9 +434,10 @@ export default function Home() {
                   textColor={textFilament.hex}
                   lidName={lidName}
                   lidOpen={lidOpen}
+                  shot={shot}
                 />
               )}
-              <p className="mt-2 text-center text-xs text-gray-400">Drag to turn the box. One finger rotates it. The lid slides toward the notch.</p>
+              <p className="mt-2 text-center text-xs text-gray-400">Drag to turn the box. One finger rotates it. The lid slides out toward the card window.</p>
               <LidFinish
                 filaments={filaments}
                 boxId={boxFilament?.id ?? boxFilamentId}
@@ -421,7 +457,7 @@ export default function Home() {
                     <img
                       key={`layered-face-${index}`}
                       src={src}
-                      alt={`Filament preview of face ${index + 1}`}
+                      alt={`Filament preview of the ${['left side', 'spine', 'right side'][index]}`}
                       className="w-full rounded bg-black/40"
                     />
                   ))}

@@ -390,7 +390,7 @@ export function readyEmail(input: {
     `Download (link expires in ${input.expiresHours} hours; generate a new one from the admin page):`,
     input.downloadUrl,
     '',
-    'The zip holds front.stl, spine.stl, back.stl, a details.txt per face, filament-layers.json, and the six record images.',
+    'The zip holds left.stl, spine.stl, right.stl, a details.txt per face, filament-layers.json, and the six record images.',
   ];
   if (input.lid) {
     lines.push(

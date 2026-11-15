@@ -1,20 +1,22 @@
 /// <reference path="./modules.d.ts" />
 import earcut from 'earcut';
 import opentype from 'opentype.js';
-import { cleanLidText, LID_TEXT_MAX, normalizeLidText } from './lidText';
+import { cleanLidText, LID_FONT_FILE, LID_TEXT_MAX, normalizeLidText } from './lidText';
 import { faceNormal, triangleBounds, type Triangle, type Vec3 } from './printGeometry';
 
-export { cleanLidText, LID_TEXT_MAX, normalizeLidText };
+export { cleanLidText, LID_FONT_FILE, LID_TEXT_MAX, normalizeLidText };
 
 /**
  * Lid.stl sits in the deck box opening. Coordinates are millimetres, Z up,
- * origin at the lid's minimum corner. The lid slides along Y. The finger
- * notch is at Y = 0, and the planeswalker spark points toward +Y.
+ * origin at the lid's minimum corner. The lid slides along Y. The card
+ * window is the front of the box, at Y = 0. The finger notch is on that
+ * end, and the planeswalker spark points toward +Y, the back. The name
+ * sits between them and reads from the window toward the spark.
  *
  * Measured from Lid.stl and edh_box.stl. The plate top is flush with the
  * box rim when the lid rests on the rail (about 98.03 mm). Side walls are
  * about 3 mm, so the lid is centred in X. The channel is open at the notch,
- * so a closed lid starts at the box's Y = 0 and stops at the far wall.
+ * so a closed lid starts at the box's Y = 0 and slides out toward the window.
  */
 
 export const PLATE_TOP_MM = 7.39;
@@ -71,7 +73,7 @@ export function lidLocalToGlb(x: number, y: number, z: number): Vec3 {
   );
 }
 
-/** Slide toward the notch. 0 is closed, 1 is open. Negative scene Z. */
+/** Slide out toward the card window. 0 is closed, 1 is open. Negative scene Z. */
 export function lidSlideOffset(open: number): number {
   const t = Math.min(1, Math.max(0, open));
   return -t * LID_OPEN_TRAVEL_MM;
@@ -95,37 +97,6 @@ function triangleArea(triangle: Triangle): number {
     ab[0] * ac[1] - ab[1] * ac[0],
   ];
   return Math.hypot(cross[0], cross[1], cross[2]) / 2;
-}
-
-function weldTriangles(triangles: readonly Triangle[], epsilon: number): Triangle[] {
-  const buckets = new Map<string, Vec3[]>();
-  const scale = 1 / epsilon;
-  const canon = (vert: Vec3): Vec3 => {
-    const ix = Math.round(vert[0] * scale);
-    const iy = Math.round(vert[1] * scale);
-    const iz = Math.round(vert[2] * scale);
-    for (let dx = -1; dx <= 1; dx += 1) {
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dz = -1; dz <= 1; dz += 1) {
-          const bucket = buckets.get(`${ix + dx},${iy + dy},${iz + dz}`);
-          if (!bucket) continue;
-          for (const point of bucket) {
-            if (near(point, vert, epsilon)) return point;
-          }
-        }
-      }
-    }
-    const copy: Vec3 = [vert[0], vert[1], vert[2]];
-    const key = `${ix},${iy},${iz}`;
-    const list = buckets.get(key) ?? [];
-    list.push(copy);
-    buckets.set(key, list);
-    return copy;
-  };
-  return triangles.map((triangle) => {
-    const verts = triangle.verts.map(canon) as [Vec3, Vec3, Vec3];
-    return { normal: faceNormal(verts[0], verts[1], verts[2]), verts };
-  });
 }
 
 function withoutSlivers(triangles: readonly Triangle[]): Triangle[] {
@@ -326,7 +297,7 @@ function contoursFromCommands(commands: readonly Command[]): XY[][] {
   const push = (points: XY[]) => {
     for (const point of points) {
       const previous = current[current.length - 1];
-      if (previous && Math.hypot(previous[0] - point[0], previous[1] - point[1]) < 1e-4) continue;
+      if (previous && Math.hypot(previous[0] - point[0], previous[1] - point[1]) < 0.2) continue;
       current.push(point);
       cursor = point;
     }
@@ -343,7 +314,10 @@ function contoursFromCommands(commands: readonly Command[]): XY[][] {
     } else if (command.type === 'Q' && command.x !== undefined && command.y !== undefined && command.x1 !== undefined && command.y1 !== undefined) {
       push(sampleQuad(cursor, [command.x1, -command.y1], [command.x, -command.y], 6));
     } else if (command.type === 'Z' && current.length >= 3) {
-      contours.push(current);
+      const first = current[0];
+      const last = current[current.length - 1];
+      if (first && last && Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.35) current.pop();
+      if (current.length >= 3) contours.push(current);
       current = [];
     }
   }
@@ -462,14 +436,12 @@ export function buildLidTextMesh(fontData: ArrayBuffer, text: string): Triangle[
   const cleaned = text.trim().replace(/\s+/g, ' ');
   if (!cleaned) return [];
   const font = opentype.parse(fontData);
-  for (const character of cleaned) {
-    if (character === ' ') continue;
-    const glyph = font.charToGlyph(character);
-    if (!glyph.unicode) throw new Error(`The lid name cannot include "${character}"`);
-  }
-  const path = font.getPath(cleaned, 0, 0, 100);
+  // A stored name can still contain a character this font does not draw.
+  const printable = [...cleaned].filter((character) => character === ' ' || font.charToGlyph(character).unicode).join('');
+  if (!printable.trim()) return [];
+  const path = font.getPath(printable, 0, 0, 100);
   const contours = contoursFromCommands(path.commands as Command[]);
   const triangles = shapesFromContours(contours).flatMap((shape) => extrudeShape(shape, EMBOSS_MM));
-  // Letters that just touch share a vertex after a small weld, so the name is one solid.
-  return withoutSlivers(weldTriangles(placeText(triangles), 0.03));
+  // Each letter stays its own closed shell. Welding a decorative face opens the surface.
+  return placeText(triangles);
 }

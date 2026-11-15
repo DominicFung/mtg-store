@@ -25,8 +25,8 @@ const DEFAULT_MODEL = 'us.stability.stable-outpaint-v1:0';
 type OutpaintArgs = { imageUrl: string; side?: string | null };
 
 /**
- * Extends commander art on one side so the subject can sit on the front or the
- * back, never centred on the spine. BEDROCK_IMAGE_MODEL overrides the model id
+ * Extends commander art on one side so the subject can sit on the left or the
+ * right, never centred on the spine. BEDROCK_IMAGE_MODEL overrides the model id
  * (default us.stability.stable-outpaint-v1:0). `side` is "left" or "right";
  * omit it and the empty side is chosen from the subject. Each side is cached
  * on its own under outpaint/v2 so a flip does not reuse the other direction

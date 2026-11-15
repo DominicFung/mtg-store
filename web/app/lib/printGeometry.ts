@@ -6,6 +6,7 @@ export {
   DEFAULT_PRINT_SETTINGS,
   encodeBinaryStl,
   encodeHeightfieldStl,
+  canonicalFaceName,
   FACE_NAMES,
   faceNormal,
   heightRange,
