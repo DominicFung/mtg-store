@@ -19,6 +19,7 @@ import {
 } from '../lib/shopOrders';
 import { LAUNCH_PROFILES, resolveProfile, type NozzleProfile, type ResolvedProfile } from '../lib/printGeometry';
 import { missingShopConfig } from '../lib/publicConfig';
+import LidSummary from '../components/lidSummary';
 
 const STATUSES = ['', 'RECEIVED', 'GENERATING_FILES', 'READY_TO_PRINT', 'PRINTING', 'SHIPPED', 'DELIVERED', 'FAILED', 'CANCELLED'];
 
@@ -139,6 +140,12 @@ export default function AdminPage() {
             <h2 className="text-lg text-[#e2c275]">{selected.orderNumber}</h2>
             <p className="text-sm">{selected.name} · {selected.status}</p>
             {selected.errorMessage && <p className="mt-2 text-sm text-amber-200">{selected.errorMessage}</p>}
+            {selected.lid && (
+              <div className="mt-3">
+                <LidSummary lid={selected.lid} />
+                <p className="mt-2 text-xs text-gray-400">The print bundle names these filaments and includes the shell, the lid, the logo, and the name as separate pieces.</p>
+              </div>
+            )}
             {selected.previews?.some(Boolean) && (
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {selected.previews.map((src, index) => src ? <img key={index} src={src} alt="" className="w-full rounded" /> : null)}

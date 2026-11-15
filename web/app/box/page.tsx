@@ -7,6 +7,12 @@ import SpinningBoxWithTextures from './spinningBox';
 import ColorCore from './colorCore';
 import CommanderSearch from './commanderSearch';
 import OrderPanel from './orderPanel';
+import LidFinish, {
+  DEFAULT_BOX_FILAMENT_ID,
+  DEFAULT_LOGO_FILAMENT_ID,
+  DEFAULT_TEXT_FILAMENT_ID,
+  filamentById,
+} from './lidFinish';
 import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
 import type { ExtendSide, SubjectBounds } from '../../../packages/print-core/src/outpaint';
 import { useFilaments } from '../lib/filaments';
@@ -49,6 +55,11 @@ export default function Home() {
   const [retryToken, setRetryToken] = useState(0);
   const [profiles, setProfiles] = useState<ResolvedProfile[]>(() => LAUNCH_PROFILES.map(resolveProfile));
   const [profileId, setProfileId] = useState(LAUNCH_PROFILES[0].id);
+  const [boxFilamentId, setBoxFilamentId] = useState(DEFAULT_BOX_FILAMENT_ID);
+  const [logoFilamentId, setLogoFilamentId] = useState(DEFAULT_LOGO_FILAMENT_ID);
+  const [textFilamentId, setTextFilamentId] = useState(DEFAULT_TEXT_FILAMENT_ID);
+  const [lidName, setLidName] = useState('');
+  const [lidOpen, setLidOpen] = useState(0);
   const { filaments, source } = useFilaments();
   const { settings: fallbackSettings } = usePrintSettings();
   const layersRef = useRef(layers);
@@ -147,6 +158,9 @@ export default function Home() {
     size ? modelSizeForCrop(size.width, size.height, settings.height) : null
   ));
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
+  const boxFilament = filamentById(filaments, boxFilamentId, DEFAULT_BOX_FILAMENT_ID);
+  const logoFilament = filamentById(filaments, logoFilamentId, DEFAULT_LOGO_FILAMENT_ID);
+  const textFilament = filamentById(filaments, textFilamentId, DEFAULT_TEXT_FILAMENT_ID);
 
   const unlocked = crops[0] ? 3 : image ? 2 : 1;
 
@@ -376,10 +390,31 @@ export default function Home() {
         <div className={step === 3 ? 'block min-w-0' : 'hidden'}>
           <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-2">
             <div className="min-w-0">
-              {previewReady && (
-                <SpinningBoxWithTextures textures={previewTextures} glbPath="/models/edh_box_v1.glb" />
+              {previewReady && boxFilament && logoFilament && textFilament && (
+                <SpinningBoxWithTextures
+                  textures={previewTextures}
+                  glbPath="/models/edh_box_v1.glb"
+                  boxColor={boxFilament.hex}
+                  logoColor={logoFilament.hex}
+                  textColor={textFilament.hex}
+                  lidName={lidName}
+                  lidOpen={lidOpen}
+                />
               )}
-              <p className="mt-2 text-center text-xs text-gray-400">Drag to turn the box. One finger rotates it.</p>
+              <p className="mt-2 text-center text-xs text-gray-400">Drag to turn the box. One finger rotates it. The lid slides toward the notch.</p>
+              <LidFinish
+                filaments={filaments}
+                boxId={boxFilament?.id ?? boxFilamentId}
+                logoId={logoFilament?.id ?? logoFilamentId}
+                textId={textFilament?.id ?? textFilamentId}
+                name={lidName}
+                open={lidOpen}
+                onBox={setBoxFilamentId}
+                onLogo={setLogoFilamentId}
+                onTextColour={setTextFilamentId}
+                onName={setLidName}
+                onOpen={setLidOpen}
+              />
               {layered[0] && (
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   {layered.map((src, index) => (
@@ -423,6 +458,12 @@ export default function Home() {
                 setColoursTouched(false);
               }}
               faceSizes={faceSizes}
+              lid={boxFilament && logoFilament && textFilament ? {
+                box: boxFilament,
+                logo: logoFilament,
+                textFilament: textFilament,
+                text: lidName,
+              } : null}
             />
           )}
         </div>

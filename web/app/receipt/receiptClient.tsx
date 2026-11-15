@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { trackOrder, type ShopOrder } from '../lib/shopOrders';
+import LidSummary from '../components/lidSummary';
 
 export default function ReceiptClient() {
   const params = useSearchParams();
@@ -42,6 +43,12 @@ export default function ReceiptClient() {
                 {order.previews.map((src, index) => (
                   src ? <img key={index} src={src} alt={`Face ${index + 1}`} className="w-full rounded bg-black/40" /> : null
                 ))}
+              </div>
+            )}
+            {order.lid && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-400">Lid</p>
+                <div className="mt-1"><LidSummary lid={order.lid} /></div>
               </div>
             )}
             {order.stops.length > 0 && (

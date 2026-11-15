@@ -95,6 +95,14 @@ If the model is not enabled, or the call fails, the Lambda stores the one-sided 
 
 Deploy `mtgstore-AppsyncStack` before the Amplify web app. That stack publishes the `side` argument and the subject fields on `outpaintCommanderArt`, and replaces the outpaint Lambda. Until that deploy, the web route falls back to the same one-sided edge extension and does not call Bedrock.
 
+## Lid colours
+
+The designer sends an optional `lid` object on `submitOrder`: box filament, Magic logo filament, and an optional name with its filament. `OrderDetail.lid` is the same shape. Older orders leave it null. No table, API, key, or user pool is replaced.
+
+Deploy **`mtgstore-AppsyncStack` before the Amplify web build.** That stack publishes the new input and the `OrderLid` fields, and replaces the submit, track, and admin order Lambdas. Until it deploys, a web build that sends `lid` is rejected by AppSync.
+
+Deploy **`mtgstore-OrdersStack`** as well so the generator writes the lid files into the zip. It can deploy before or after the web build. It does not change the API. The zip Dominic downloads contains `box-body.stl`, `lid-base.stl`, `lid-spark.stl`, `lid-text.stl` when the lid has a name, and `lid-colours.txt`. Customers still only see the receipt and the tracking page.
+
 ## Payments
 
 `paymentStatus` is `NOT_CONNECTED`. The hook is the comment marked `PAYMENT_HOOK` in `submitOrder`. Price on the receipt is "Price confirmed before printing".

@@ -9,6 +9,7 @@ import {
   PRICE_LABEL,
   rateLimitMessage,
   SHOP_PARTITION,
+  snapshotLid,
   snapshotStops,
   type HistoryEntry,
 } from '../../orders/logic';
@@ -59,8 +60,14 @@ export const handler = async (event: AppSyncResolverEvent<{ input: unknown }>) =
   const profile = await getProfile(input.profileId);
   if (!profile || !profile.active) throw new Error('That nozzle profile is not available');
   const resolved = resolveProfile(profile);
-  const filaments = await getFilaments(input.stops.map((stop) => stop.filamentId));
+  const filamentIds = input.stops.map((stop) => stop.filamentId);
+  if (input.lid) {
+    filamentIds.push(input.lid.boxFilamentId, input.lid.logoFilamentId);
+    if (input.lid.textFilamentId) filamentIds.push(input.lid.textFilamentId);
+  }
+  const filaments = await getFilaments(filamentIds);
   const stops = snapshotStops(input.stops, filaments, profile);
+  const lid = input.lid ? snapshotLid(input.lid, filaments) : undefined;
   const now = new Date().toISOString();
   const orderId = createOrderId();
   let orderNumber = newOrderNumber();
@@ -92,6 +99,7 @@ export const handler = async (event: AppSyncResolverEvent<{ input: unknown }>) =
     country: input.country,
     profileSnapshot: resolved,
     stops,
+    lid,
     history,
     generationAttempt: 0,
     crops: input.crops,
@@ -104,6 +112,7 @@ export const handler = async (event: AppSyncResolverEvent<{ input: unknown }>) =
     email: input.email,
     profile: resolved,
     stops,
+    lid: lid ?? null,
     crops: input.crops,
     createdAt: now,
     paymentStatus: PAYMENT_STATUS,

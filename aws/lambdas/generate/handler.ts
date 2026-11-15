@@ -3,12 +3,19 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/hueforge';
 import { profileToSettings, type NozzleProfile } from '../../../packages/print-core/src/profiles';
 import type { FaceName } from '../../../packages/print-core/src/printGeometry';
-import { generationDecision, orderObjectKeys, readyEmail, failedEmail, PRESIGN_TTL_SECONDS } from '../orders/logic';
+import { generationDecision, orderObjectKeys, readyEmail, failedEmail, PRESIGN_TTL_SECONDS, type LidFinish } from '../orders/logic';
+import { buildLidPrint } from './lidPrint';
 import { getOrder, notifyOwner, presignGet, requiredEnv, s3, updateOrder } from '../orders/store';
 import { buildOrderZip, decodePng } from './archive';
 import type { OrderItem } from '../orders/view';
 
 const FACES: FaceName[] = ['front', 'spine', 'back'];
+
+function isLidFinish(value: unknown): value is LidFinish {
+  if (!value || typeof value !== 'object') return false;
+  const lid = value as Record<string, unknown>;
+  return typeof lid.boxFilamentId === 'string' && typeof lid.logoFilamentId === 'string' && typeof lid.boxFilamentName === 'string';
+}
 
 async function readObject(key: string): Promise<Uint8Array> {
   const result = await s3.send(new GetObjectCommand({ Bucket: requiredEnv('ORDER_BUCKET_NAME'), Key: key }));
@@ -82,7 +89,8 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
       const decoded = decodePng(cropPng);
       return { name, rgba: decoded.rgba, width: decoded.width, height: decoded.height, cropPng };
     }));
-    const zip = await buildOrderZip({ orderNumber: order.orderNumber, settings, stops, faces });
+    const lid = isLidFinish(order.lid) ? buildLidPrint(order.lid) : null;
+    const zip = await buildOrderZip({ orderNumber: order.orderNumber, settings, stops, faces, lid });
     await s3.send(new PutObjectCommand({
       Bucket: requiredEnv('ORDER_BUCKET_NAME'),
       Key: keys.zip,
@@ -104,6 +112,7 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
       name: order.name,
       downloadUrl,
       expiresHours: Math.round(PRESIGN_TTL_SECONDS / 3600),
+      lid: isLidFinish(order.lid) ? order.lid : null,
     });
     const notifyError = await notifyOwner(mail.subject, mail.text);
     if (notifyError) await updateOrder(order.orderId, { notifyError }, 'attribute_exists(orderId)');

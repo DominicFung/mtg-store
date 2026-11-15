@@ -69,5 +69,24 @@ export async function withImages(item: OrderItem, includeDownload: boolean) {
     downloadUrl,
     downloadExpiresAt,
     profileSnapshotJson: JSON.stringify(item.profileSnapshot ?? {}),
+    lid: lidView(item.lid),
+  };
+}
+
+function lidView(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+  const lid = value as Record<string, unknown>;
+  if (typeof lid.boxFilamentId !== 'string' || typeof lid.logoFilamentId !== 'string') return null;
+  return {
+    boxFilamentId: lid.boxFilamentId,
+    boxFilamentName: typeof lid.boxFilamentName === 'string' ? lid.boxFilamentName : lid.boxFilamentId,
+    boxHex: typeof lid.boxHex === 'string' ? lid.boxHex : '#888888',
+    logoFilamentId: lid.logoFilamentId,
+    logoFilamentName: typeof lid.logoFilamentName === 'string' ? lid.logoFilamentName : lid.logoFilamentId,
+    logoHex: typeof lid.logoHex === 'string' ? lid.logoHex : '#888888',
+    text: typeof lid.text === 'string' && lid.text ? lid.text : null,
+    textFilamentId: typeof lid.textFilamentId === 'string' ? lid.textFilamentId : null,
+    textFilamentName: typeof lid.textFilamentName === 'string' ? lid.textFilamentName : null,
+    textHex: typeof lid.textHex === 'string' ? lid.textHex : null,
   };
 }

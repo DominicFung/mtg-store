@@ -11,6 +11,7 @@ import {
   parseSubmitInput,
   rateLimitMessage,
   readyEmail,
+  snapshotLid,
   snapshotStops,
 } from './logic';
 
@@ -59,6 +60,37 @@ test('filament snapshots come from the catalogue, not the client', () => {
   assert.equal(stops[0].td, 4);
   assert.equal(stops[1].endLayer, 50);
   assert.throws(() => snapshotStops([{ filamentId: 'nope', endLayer: 10 }], [], LAUNCH_PROFILES[0]), /Unknown filament/);
+});
+
+test('lid colours are optional, catalogue-backed, and limited to 20 characters', () => {
+  const plain = parseSubmitInput(valid);
+  assert.equal(plain.lid, undefined);
+  const withLid = parseSubmitInput({
+    ...valid,
+    lid: { boxFilamentId: 'black', logoFilamentId: 'red', text: '  Dom Fungus  ', textFilamentId: 'silver' },
+  });
+  assert.equal(withLid.lid?.text, 'Dom Fungus');
+  const catalogue = [
+    { id: 'black', name: 'Elegoo PLA Black', hex: '#161616', td: 0.5 },
+    { id: 'red', name: 'Elegoo PLA Red', hex: '#D4252B', td: 3 },
+    { id: 'silver', name: 'GiantArm Silk Silver', hex: '#D5DCE3', td: 1.7 },
+  ];
+  const lid = snapshotLid(withLid.lid!, catalogue);
+  assert.equal(lid.boxFilamentName, 'Elegoo PLA Black');
+  assert.equal(lid.text, 'Dom Fungus');
+  assert.equal(lid.textHex, '#D5DCE3');
+  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'black', logoFilamentId: 'red', text: 'this name is too long now' } }), /20/);
+  assert.throws(() => snapshotLid({ boxFilamentId: 'missing', logoFilamentId: 'red' }, catalogue), /box colour/);
+  const mail = readyEmail({
+    orderNumber: 'MR-AAAAAAAA',
+    name: 'Ada',
+    downloadUrl: 'https://example.test/file',
+    expiresHours: 4,
+    lid,
+  });
+  assert.match(mail.text, /Elegoo PLA Black/);
+  assert.match(mail.text, /lid-spark\.stl/);
+  assert.match(mail.text, /Dom Fungus/);
 });
 
 test('status moves, shipping, retries, and stale generator messages', () => {
