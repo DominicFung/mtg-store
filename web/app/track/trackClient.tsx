@@ -64,7 +64,7 @@ export default function TrackClient() {
             {order.lid && <div className="mt-3"><LidSummary lid={order.lid} /></div>}
             {order.previews.some(Boolean) && (
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {order.previews.map((src, index) => src ? <img key={index} src={src} alt={`${['Left side', 'Spine', 'Right side'][index]} of the print`} className="w-full rounded" /> : null)}
+                {order.previews.map((src, index) => src ? <img key={index} src={src} alt={`${['Right side', 'Spine', 'Left side'][index]} of the print`} className="w-full rounded" /> : null)}
               </div>
             )}
           </article>

@@ -2,14 +2,14 @@ import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/hueforge';
 import { profileToSettings, type NozzleProfile } from '../../../packages/print-core/src/profiles';
-import type { FaceName } from '../../../packages/print-core/src/printGeometry';
+import { FACE_NAMES, type FaceName } from '../../../packages/print-core/src/printGeometry';
 import { generationDecision, orderObjectKeys, readyEmail, failedEmail, PRESIGN_TTL_SECONDS, type LidFinish } from '../orders/logic';
 import { buildLidPrint } from './lidPrint';
 import { getOrder, notifyOwner, presignGet, requiredEnv, s3, updateOrder } from '../orders/store';
 import { buildOrderZip, decodePng } from './archive';
 import type { OrderItem } from '../orders/view';
 
-const FACES: FaceName[] = ['left', 'spine', 'right'];
+const FACES: FaceName[] = [...FACE_NAMES];
 
 function isLidFinish(value: unknown): value is LidFinish {
   if (!value || typeof value !== 'object') return false;

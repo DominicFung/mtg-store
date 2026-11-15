@@ -21,9 +21,9 @@ interface Props {
 }
 
 const FACE_TEXTURE_INDEX: Record<string, number> = {
-  Face3: 0, // left plate, same mesh as before the rename
-  Face2: 1, // spine plate, same mesh as before the rename
-  Face1: 2, // right plate, same mesh as before the rename
+  Face3: 2, // left side of the box, third crop
+  Face2: 1, // spine
+  Face1: 0, // right side of the box, first crop
 };
 
 const SHOTS: Record<string, { position: [number, number, number]; target: [number, number, number]; up?: [number, number, number] }> = {

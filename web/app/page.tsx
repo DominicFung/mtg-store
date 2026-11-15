@@ -21,7 +21,7 @@ const STEPS = [
   {
     icon: Sparkles,
     title: 'AI extends the art',
-    body: 'The picture grows so it can wrap the left side, the spine, and the right side.',
+    body: 'The picture grows so it can wrap the right side, the spine, and the left side.',
   },
   {
     icon: Crop,

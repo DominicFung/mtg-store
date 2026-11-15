@@ -1,5 +1,6 @@
 'use client';
 
+import { BOX_FILAMENT_IDS } from '../../../packages/print-core/src/boxColours';
 import { cleanLidText } from '../../../packages/print-core/src/lidText';
 import type { Filament } from '../lib/filamentCatalogue';
 
@@ -20,6 +21,13 @@ type Props = {
   onName: (value: string) => void;
   onOpen: (value: number) => void;
 };
+
+export function boxFilamentChoices(filaments: Filament[]): Filament[] {
+  const stock = filaments.filter((filament) => filament.inStock);
+  return BOX_FILAMENT_IDS
+    .map((id) => stock.find((filament) => filament.id === id))
+    .filter((filament): filament is Filament => Boolean(filament));
+}
 
 export function filamentById(filaments: Filament[], id: string, fallbackId: string): Filament | null {
   const stock = filaments.filter((filament) => filament.inStock);
@@ -43,7 +51,8 @@ export default function LidFinish({
   onOpen,
 }: Props) {
   const stock = filaments.filter((filament) => filament.inStock);
-  const box = filamentById(filaments, boxId, DEFAULT_BOX_FILAMENT_ID);
+  const boxChoices = boxFilamentChoices(filaments);
+  const box = boxChoices.find((filament) => filament.id === boxId) ?? boxChoices[0] ?? null;
   const logo = filamentById(filaments, logoId, DEFAULT_LOGO_FILAMENT_ID);
   const textColour = filamentById(filaments, textId, DEFAULT_TEXT_FILAMENT_ID);
   return (
@@ -75,8 +84,8 @@ export default function LidFinish({
 
       <Swatches
         label="Box colour"
-        hint="Colours the shell and the lid."
-        filaments={stock}
+        hint="Black or pink for launch. Colours the shell and the lid."
+        filaments={boxChoices}
         selectedId={box?.id ?? ''}
         onSelect={onBox}
       />

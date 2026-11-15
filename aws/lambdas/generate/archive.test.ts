@@ -95,7 +95,7 @@ test('lid files are added beside the face plates and the face mesh is unchanged'
   assert.deepEqual(lidLeft, plainLeft);
   assert.ok(lidZip.file('right.stl'));
   const manifestFaces = JSON.parse(await plainZip.file('filament-layers.json')!.async('string')) as { faces: Array<{ face: string }> };
-  assert.deepEqual(manifestFaces.faces.map((face) => face.face), ['left', 'spine', 'right']);
+  assert.deepEqual(manifestFaces.faces.map((face) => face.face), ['right', 'spine', 'left']);
   const body = await lidZip.file('box-body.stl')!.async('uint8array');
   const base = await lidZip.file('lid-base.stl')!.async('uint8array');
   const spark = await lidZip.file('lid-spark.stl')!.async('uint8array');

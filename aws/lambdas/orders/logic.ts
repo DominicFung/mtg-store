@@ -1,4 +1,5 @@
 import { colorCoreLayerCount, layerTopMm } from '../../../packages/print-core/src/hueforge';
+import { isBoxFilament } from '../../../packages/print-core/src/boxColours';
 import { normalizeLidText } from '../../../packages/print-core/src/lidText';
 import { isOrderNumber, newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
 import {
@@ -247,8 +248,10 @@ function parseLid(value: unknown): LidInput | undefined {
   if (typeof value !== 'object') throw new Error('Lid colours are invalid');
   const lid = value as Record<string, unknown>;
   const text = normalizeLidText(lid.text);
+  const boxFilamentId = requiredText(lid.boxFilamentId, 'Box colour', 80);
+  if (!isBoxFilament(boxFilamentId)) throw new Error('The box is black or pink for now');
   return {
-    boxFilamentId: requiredText(lid.boxFilamentId, 'Box colour', 80),
+    boxFilamentId,
     logoFilamentId: requiredText(lid.logoFilamentId, 'Logo colour', 80),
     text: text || undefined,
     textFilamentId: text ? requiredText(lid.textFilamentId, 'Name colour', 80) : undefined,
@@ -283,6 +286,7 @@ export function snapshotStops(
 
 export function snapshotLid(lid: LidInput, catalogue: readonly CatalogueFilament[]): LidFinish {
   const byId = new Map(catalogue.map((filament) => [filament.id, filament]));
+  if (!isBoxFilament(lid.boxFilamentId)) throw new Error('The box is black or pink for now');
   const box = byId.get(lid.boxFilamentId);
   const logo = byId.get(lid.logoFilamentId);
   if (!box) throw new Error('Unknown filament for the box colour');

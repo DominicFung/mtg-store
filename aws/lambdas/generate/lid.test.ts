@@ -92,9 +92,10 @@ test('lid names are optional and capped at 20 characters', () => {
 });
 
 test('older face keys still name the left and right plates', () => {
-  assert.equal(canonicalFaceName('front'), 'left');
-  assert.equal(canonicalFaceName('back'), 'right');
+  assert.equal(canonicalFaceName('front'), 'right');
+  assert.equal(canonicalFaceName('back'), 'left');
   assert.equal(canonicalFaceName('left'), 'left');
+  assert.equal(canonicalFaceName('right'), 'right');
   assert.equal(canonicalFaceName('spine'), 'spine');
   assert.equal(canonicalFaceName('nope'), null);
 });

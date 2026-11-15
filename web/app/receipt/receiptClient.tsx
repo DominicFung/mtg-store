@@ -41,7 +41,7 @@ export default function ReceiptClient() {
             {order.previews.some(Boolean) && (
               <div className="grid grid-cols-3 gap-2">
                 {order.previews.map((src, index) => (
-                  src ? <img key={index} src={src} alt={`${['Left side', 'Spine', 'Right side'][index]} of the print`} className="w-full rounded bg-black/40" /> : null
+                  src ? <img key={index} src={src} alt={`${['Right side', 'Spine', 'Left side'][index]} of the print`} className="w-full rounded bg-black/40" /> : null
                 ))}
               </div>
             )}
