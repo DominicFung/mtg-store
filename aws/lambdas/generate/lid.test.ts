@@ -27,8 +27,9 @@ test('the lid splits into a flat base and the raised spark', () => {
   assert.equal(open.base.length + open.spark.length, 2182);
   assert.equal(open.spark.length, 721);
   const sparkBounds = triangleBounds(open.spark);
-  assert.ok(sparkBounds.min[0] > 23 && sparkBounds.max[0] < 54);
-  assert.ok(sparkBounds.min[1] > 32 && sparkBounds.max[1] < 87);
+  // Half turn about Z. The spark was centred in X and sat toward +Y; it stays centred and moves toward Y = 0.
+  assert.ok(sparkBounds.min[0] > 22 && sparkBounds.max[0] < 55, `spark x ${sparkBounds.min[0]}..${sparkBounds.max[0]}`);
+  assert.ok(sparkBounds.min[1] > 0 && sparkBounds.max[1] < 57, `spark y ${sparkBounds.min[1]}..${sparkBounds.max[1]}`);
   assert.ok(sparkBounds.max[2] > 8.3);
   assert.ok(triangleBounds(open.base).max[2] <= PLATE_TOP_MM + 0.02);
 
@@ -39,16 +40,17 @@ test('the lid splits into a flat base and the raised spark', () => {
   assert.ok(closed.spark.length > open.spark.length);
 });
 
-test('the name is a 1 mm emboss centred on the flat band and reads from the window toward the spark', () => {
+test('the name is a 1 mm emboss closer to the logo and still readable after the half turn', () => {
   const mesh = buildLidTextMesh(font, 'Dom Fungus');
   assert.ok(mesh.length > 20);
   const bounds = triangleBounds(mesh);
   const centerX = (bounds.min[0] + bounds.max[0]) / 2;
   const centerY = (bounds.min[1] + bounds.max[1]) / 2;
+  const turnedCenterY = LID_SIZE.depth - 23;
   assert.ok(Math.abs(centerX - LID_SIZE.width / 2) < 0.6, `center x ${centerX}`);
-  assert.ok(Math.abs(centerY - 17.5) < 0.6, `center y ${centerY}`);
-  assert.ok(bounds.min[1] > 6, 'stays clear of the notch');
-  assert.ok(bounds.max[1] < 31, 'stays clear of the spark');
+  assert.ok(Math.abs(centerY - turnedCenterY) < 0.6, `center y ${centerY}`);
+  assert.ok(bounds.min[1] > 55, 'stays clear of the turned spark');
+  assert.ok(bounds.max[1] < LID_SIZE.depth - 4, 'stays on the plate');
   assert.ok(bounds.max[0] - bounds.min[0] <= 58.1);
   assert.ok(Math.abs(bounds.min[2] - PLATE_TOP_MM) < 0.02);
   assert.ok(Math.abs((bounds.max[2] - bounds.min[2]) - EMBOSS_MM) < 0.02);
@@ -57,7 +59,7 @@ test('the name is a 1 mm emboss centred on the flat band and reads from the wind
   const wide = buildLidTextMesh(font, 'ABCDEFGHIJKLMNOPQRST');
   const wideBounds = triangleBounds(wide);
   assert.ok(wideBounds.max[0] - wideBounds.min[0] <= 58.1);
-  assert.ok(wideBounds.min[1] > 6 && wideBounds.max[1] < 31);
+  assert.ok(wideBounds.min[1] > 55 && wideBounds.max[1] < LID_SIZE.depth - 4);
   assert.equal(buildLidTextMesh(font, '   ').length, 0);
   assert.ok(buildLidTextMesh(font, "O'Brien & Co. 2").length > 20);
   assert.equal(buildLidTextMesh(font, '+').length, 0);
@@ -75,8 +77,9 @@ test('the name is a 1 mm emboss centred on the flat band and reads from the wind
       gapAt = (centers[index] + centers[index - 1]) / 2;
     }
   }
-  const leftCount = pair.filter((triangle) => (triangle.verts[0][0] + triangle.verts[1][0] + triangle.verts[2][0]) / 3 < gapAt).length;
-  assert.ok(Math.abs(leftCount - nCount) < Math.abs(leftCount - oCount), `N should be the left letter, ${leftCount} vs N ${nCount} O ${oCount}`);
+  const lowXCount = pair.filter((triangle) => (triangle.verts[0][0] + triangle.verts[1][0] + triangle.verts[2][0]) / 3 < gapAt).length;
+  // The half turn swaps X. From the end the lid slides out of, N is still the left letter.
+  assert.ok(Math.abs(lowXCount - oCount) < Math.abs(lowXCount - nCount), `O should be the low-X letter after the turn, ${lowXCount} vs N ${nCount} O ${oCount}`);
 });
 
 test('lid names are optional and capped at 20 characters', () => {

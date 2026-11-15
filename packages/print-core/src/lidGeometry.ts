@@ -8,15 +8,17 @@ export { cleanLidText, LID_FONT_FILE, LID_TEXT_MAX, normalizeLidText };
 
 /**
  * Lid.stl sits in the deck box opening. Coordinates are millimetres, Z up,
- * origin at the lid's minimum corner. The lid slides along Y. The card
- * window is the front of the box, at Y = 0. The finger notch is on that
- * end, and the planeswalker spark points toward +Y, the back. The name
- * sits between them and reads from the window toward the spark.
+ * origin at the lid's minimum corner. The source file has the finger notch
+ * at Y = 0 and the planeswalker spark toward +Y. The spine art plate is on
+ * the box's Y = 0 end. The lid is turned 180° about Z before it is placed,
+ * so the logo and the name stay on the top face, the name stays readable,
+ * and the notch end is the far end. The lid then slides out along +Y, away
+ * from the spine plate.
  *
  * Measured from Lid.stl and edh_box.stl. The plate top is flush with the
  * box rim when the lid rests on the rail (about 98.03 mm). Side walls are
- * about 3 mm, so the lid is centred in X. The channel is open at the notch,
- * so a closed lid starts at the box's Y = 0 and slides out toward the window.
+ * about 3 mm, so the lid is centred in X. A closed lid starts at the box's
+ * Y = 0 and still fills the same footprint after the half turn.
  */
 
 export const PLATE_TOP_MM = 7.39;
@@ -54,7 +56,8 @@ export const STL_TO_GLB = {
 };
 
 const TEXT_CENTER_X = LID_SIZE.width / 2;
-const TEXT_CENTER_Y = 17.5;
+/** In the source lid, before the half turn. Closer to the spark than the old 17.5 mm band. */
+const TEXT_CENTER_Y = 23;
 const TEXT_MAX_WIDTH = 58;
 const TEXT_MAX_HEIGHT = 9;
 
@@ -73,10 +76,25 @@ export function lidLocalToGlb(x: number, y: number, z: number): Vec3 {
   );
 }
 
-/** Slide out toward the card window. 0 is closed, 1 is open. Negative scene Z. */
+/**
+ * Slide out away from the spine plate (box Y = 0, scene −Z) and toward the
+ * opposite end. 0 is closed, 1 is open. Positive scene Z.
+ */
 export function lidSlideOffset(open: number): number {
   const t = Math.min(1, Math.max(0, open));
-  return -t * LID_OPEN_TRAVEL_MM;
+  return t * LID_OPEN_TRAVEL_MM;
+}
+
+/** Half turn about vertical. The top face stays up and the design stays readable. */
+export function turnLidAround(triangles: readonly Triangle[]): Triangle[] {
+  return triangles.map((triangle) => {
+    const verts = triangle.verts.map((vert): Vec3 => [
+      LID_SIZE.width - vert[0],
+      LID_SIZE.depth - vert[1],
+      vert[2],
+    ]) as [Vec3, Vec3, Vec3];
+    return { normal: faceNormal(verts[0], verts[1], verts[2]), verts };
+  });
 }
 
 function vkey(v: Vec3): string {
@@ -243,7 +261,7 @@ export function splitLid(triangles: readonly Triangle[], cap = false): { base: T
     if (z > SPARK_SPLIT_Z) spark.push(triangle);
     else base.push(triangle);
   }
-  if (!cap) return { base, spark };
+  if (!cap) return { base: turnLidAround(base), spark: turnLidAround(spark) };
   // The spark outline is one closed loop. The plate edge under it is the same
   // cut, with a coarser tessellation, so the base is capped from that loop.
   const outline = boundaryLoops(spark);
@@ -251,7 +269,7 @@ export function splitLid(triangles: readonly Triangle[], cap = false): { base: T
     base.push(...capLoop(loop, 'up'));
     spark.push(...capLoop(loop, 'down'));
   }
-  return { base: withoutSlivers(base), spark: withoutSlivers(spark) };
+  return { base: turnLidAround(withoutSlivers(base)), spark: turnLidAround(withoutSlivers(spark)) };
 }
 
 type Command = {
@@ -443,5 +461,5 @@ export function buildLidTextMesh(fontData: ArrayBuffer, text: string): Triangle[
   const contours = contoursFromCommands(path.commands as Command[]);
   const triangles = shapesFromContours(contours).flatMap((shape) => extrudeShape(shape, EMBOSS_MM));
   // Each letter stays its own closed shell. Welding a decorative face opens the surface.
-  return placeText(triangles);
+  return turnLidAround(placeText(triangles));
 }

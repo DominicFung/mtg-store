@@ -21,34 +21,21 @@ interface Props {
 }
 
 const FACE_TEXTURE_INDEX: Record<string, number> = {
-  Face3: 0, // left side, when the card window faces you
-  Face2: 1, // spine, moved onto the back
-  Face1: 2, // right side
+  Face3: 0, // left plate, same mesh as before the rename
+  Face2: 1, // spine plate, same mesh as before the rename
+  Face1: 2, // right plate, same mesh as before the rename
 };
 
 const SHOTS: Record<string, { position: [number, number, number]; target: [number, number, number]; up?: [number, number, number] }> = {
-  front: { position: [0, 62, -128], target: [0, 2, -8] },
+  // Same camera the shop uses before anyone drags it.
+  shop: { position: [36, 118, -62], target: [0, 6, -8] },
+  front: { position: [0, 62, 140], target: [0, 2, 12] },
   left: { position: [150, 22, -8], target: [0, 6, -6] },
   right: { position: [-150, 22, -8], target: [0, 6, -6] },
-  back: { position: [0, 36, 150], target: [0, 6, 8] },
-  top: { position: [0, 170, 0], target: [0, 0, -4], up: [0, 0, 1] },
-  open: { position: [46, 86, -168], target: [2, 8, -18] },
+  back: { position: [0, 36, -140], target: [0, 6, -8] },
+  top: { position: [0, 170, 0], target: [0, 0, 4], up: [0, 0, -1] },
+  open: { position: [42, 78, 160], target: [0, 6, 16] },
 };
-
-/** The spine plate ships on the window. Park it on the back, still reading upright. */
-function orientDeckBox(scene: THREE.Object3D) {
-  if (scene.userData.lidOriented) return;
-  const shell = scene.getObjectByName('edh_box') as THREE.Mesh | undefined;
-  const spine = scene.getObjectByName('Face2');
-  if (!shell?.geometry || !spine) return;
-  shell.geometry.computeBoundingBox();
-  const bounds = shell.geometry.boundingBox;
-  if (!bounds) return;
-  const proud = bounds.min.z - spine.position.z;
-  spine.position.z = bounds.max.z + proud;
-  spine.rotation.y = Math.PI;
-  scene.userData.lidOriented = true;
-}
 
 function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMaterial) {
   const previous = mesh.material;
@@ -62,8 +49,8 @@ function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMateri
 function geometryFromTriangles(triangles: readonly Triangle[], mirrorX = false): THREE.BufferGeometry {
   const positions = new Float32Array(triangles.length * 9);
   triangles.forEach((triangle, index) => {
-    // STL Y becomes scene Z, which mirrors the shell. The name is authored to read
-    // on the printed lid, so the preview mirrors it back across the lid.
+    // Scene Z is STL Y, which mirrors the shell. The name mesh is already turned
+    // 180° with the lid, so one more X flip makes it read the same way in the preview.
     const verts = mirrorX
       ? triangle.verts
       : [triangle.verts[0], triangle.verts[2], triangle.verts[1]] as const;
@@ -242,7 +229,6 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
   }, [shot]);
 
   useEffect(() => {
-    orientDeckBox(scene);
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
