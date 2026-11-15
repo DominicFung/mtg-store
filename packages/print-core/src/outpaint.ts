@@ -19,15 +19,16 @@ export type CropRect = { x: number; y: number; width: number; height: number };
 
 /**
  * Which way to grow the canvas. A subject on the left is extended to the right
- * so they stay on the left face; a subject on the right is extended to the left
- * so they stay on the right. A centred subject (Brigid) is kept on the left.
+ * so they stay on the right face of the box; a subject on the right is extended
+ * to the left so they stay on the left face. A centred subject (Brigid) is kept
+ * on the right face.
  */
 export function extendSideForSubject(subjectX: number): ExtendSide {
   return subjectX > 0.5 ? 'left' : 'right';
 }
 
 export function outerFaceForSide(side: ExtendSide): OuterFace {
-  return side === 'right' ? 'left' : 'right';
+  return side === 'right' ? 'right' : 'left';
 }
 
 /** Move original-image fractions into the extended canvas. */
@@ -155,14 +156,14 @@ export function extendToAspect(image: RgbaImage, aspect = WRAP_ASPECT, side?: Ex
 }
 
 /**
- * Largest three-face crop that keeps the subject inside the left face when
- * they sit on the left, or the right face when they sit on the right.
+ * Largest three-face crop that keeps the subject inside the right face when
+ * they sit on the left, or the left face when they sit on the right.
  */
 export function defaultCropBox(imageWidth: number, imageHeight: number, subject: SubjectBounds): CropRect {
   if (imageWidth < 1 || imageHeight < 1) return { x: 0, y: 0, width: 0, height: 0 };
-  const face: OuterFace = subject.center <= 0.5 ? 'left' : 'right';
-  const faceStart = face === 'left' ? 0 : RIGHT_START;
-  const faceEnd = face === 'left' ? LEFT_END : 1;
+  const face: OuterFace = subject.center <= 0.5 ? 'right' : 'left';
+  const faceStart = face === 'right' ? 0 : RIGHT_START;
+  const faceEnd = face === 'right' ? LEFT_END : 1;
   const scale = Math.min(imageWidth / BOX_WRAP_WIDTH, imageHeight / BOX_FACE_HEIGHT);
   let width = BOX_WRAP_WIDTH * scale;
   let height = BOX_FACE_HEIGHT * scale;
@@ -200,9 +201,9 @@ export function defaultCropBox(imageWidth: number, imageHeight: number, subject:
 export function faceAtX(crop: CropRect, x: number): 'left' | 'spine' | 'right' {
   if (crop.width <= 0) return 'spine';
   const rel = (x - crop.x) / crop.width;
-  if (rel < LEFT_END) return 'left';
+  if (rel < LEFT_END) return 'right';
   if (rel < RIGHT_START) return 'spine';
-  return 'right';
+  return 'left';
 }
 
 function extensionPixels(

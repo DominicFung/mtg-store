@@ -11,6 +11,7 @@ import LidFinish, {
   DEFAULT_BOX_FILAMENT_ID,
   DEFAULT_LOGO_FILAMENT_ID,
   DEFAULT_TEXT_FILAMENT_ID,
+  boxFilamentChoices,
   filamentById,
 } from './lidFinish';
 import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
@@ -138,9 +139,9 @@ export default function Home() {
       return canvas.toDataURL('image/png');
     };
     setCrops([
-      paint('LEFT', '#8f2d2a', 293),
-      paint('SPINE', '#c4a15a', 255),
       paint('RIGHT', '#2a4f8f', 293),
+      paint('SPINE', '#c4a15a', 255),
+      paint('LEFT', '#8f2d2a', 293),
     ]);
     setLayered(['', '', '']);
   }, []);
@@ -193,7 +194,8 @@ export default function Home() {
     size ? modelSizeForCrop(size.width, size.height, settings.height) : null
   ));
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
-  const boxFilament = filamentById(filaments, boxFilamentId, DEFAULT_BOX_FILAMENT_ID);
+  const boxChoices = boxFilamentChoices(filaments);
+  const boxFilament = boxChoices.find((filament) => filament.id === boxFilamentId) ?? boxChoices[0] ?? null;
   const logoFilament = filamentById(filaments, logoFilamentId, DEFAULT_LOGO_FILAMENT_ID);
   const textFilament = filamentById(filaments, textFilamentId, DEFAULT_TEXT_FILAMENT_ID);
 
@@ -249,7 +251,7 @@ export default function Home() {
         {flipping ? 'Extending the other side…' : 'Flip side'}
       </button>
       <span className="text-xs text-gray-400">
-        {extendSide === 'left' ? 'Extended on the left, subject on the right.' : 'Extended on the right, subject on the left.'}
+        {extendSide === 'left' ? 'Extended on the left, subject on the left.' : 'Extended on the right, subject on the right.'}
       </span>
       {flipError && <span className="text-xs text-red-300">{flipError}</span>}
     </div>
@@ -382,7 +384,7 @@ export default function Home() {
           <div>
             <h2 className="text-lg font-semibold text-[#e2c275]">Crop to the box faces</h2>
             <p className="mt-1 text-sm text-gray-300">
-              Drag the frame and the gold corners. It stays at the three-face ratio: left, spine, then right.
+              Drag the frame and the gold corners. It stays at the three-face ratio: right, spine, then left.
             </p>
             {image ? (
               <ImageCropper
@@ -457,7 +459,7 @@ export default function Home() {
                     <img
                       key={`layered-face-${index}`}
                       src={src}
-                      alt={`Filament preview of the ${['left side', 'spine', 'right side'][index]}`}
+                      alt={`Filament preview of the ${['right side', 'spine', 'left side'][index]}`}
                       className="w-full rounded bg-black/40"
                     />
                   ))}

@@ -61,17 +61,20 @@ export const PRINT_SETTINGS_ID = 'default';
 /** Keeps a phone from allocating a multi-hundred-megabyte mesh. */
 export const MAX_MESH_TRIANGLES = 180_000;
 
-/** Art plates, in wrap order: left side, spine (the back), right side. The card window is the front and has no plate. */
-export const FACE_NAMES = ['left', 'spine', 'right'] as const;
+/**
+ * Art plates in crop order. The first panel of the picture is the right side
+ * of the box, then the spine, then the left side.
+ */
+export const FACE_NAMES = ['right', 'spine', 'left'] as const;
 export type FaceName = (typeof FACE_NAMES)[number];
 
 /**
- * Crop index 0 was stored as "front" and index 2 as "back" before the plates
- * were renamed. Those images are the left and right sides.
+ * Crop index 0 was stored as "front", then renamed "left", and is now the
+ * right side. Index 2 was "back", then "right", and is now the left side.
  */
 const LEGACY_FACE_NAMES: Record<string, FaceName> = {
-  front: 'left',
-  back: 'right',
+  front: 'right',
+  back: 'left',
   left: 'left',
   right: 'right',
   spine: 'spine',

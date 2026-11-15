@@ -67,11 +67,12 @@ test('lid colours are optional, catalogue-backed, and limited to 20 characters',
   assert.equal(plain.lid, undefined);
   const withLid = parseSubmitInput({
     ...valid,
-    lid: { boxFilamentId: 'black', logoFilamentId: 'red', text: '  Dom Fungus  ', textFilamentId: 'silver' },
+    lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'red', text: '  Dom Fungus  ', textFilamentId: 'silver' },
   });
   assert.equal(withLid.lid?.text, 'Dom Fungus');
   const catalogue = [
-    { id: 'black', name: 'Elegoo PLA Black', hex: '#161616', td: 0.5 },
+    { id: 'elegoo-pla-black', name: 'Elegoo PLA Black', hex: '#161616', td: 0.5 },
+    { id: 'elegoo-matte-pla-sakura-pink', name: 'Elegoo Matte PLA Sakura Pink', hex: '#F2A8C0', td: 4.8 },
     { id: 'red', name: 'Elegoo PLA Red', hex: '#D4252B', td: 3 },
     { id: 'silver', name: 'GiantArm Silk Silver', hex: '#D5DCE3', td: 1.7 },
   ];
@@ -79,8 +80,10 @@ test('lid colours are optional, catalogue-backed, and limited to 20 characters',
   assert.equal(lid.boxFilamentName, 'Elegoo PLA Black');
   assert.equal(lid.text, 'Dom Fungus');
   assert.equal(lid.textHex, '#D5DCE3');
-  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'black', logoFilamentId: 'red', text: 'this name is too long now' } }), /20/);
-  assert.throws(() => snapshotLid({ boxFilamentId: 'missing', logoFilamentId: 'red' }, catalogue), /box colour/);
+  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'red', text: 'this name is too long now' } }), /20/);
+  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'red', logoFilamentId: 'red' } }), /black or pink/);
+  assert.throws(() => snapshotLid({ boxFilamentId: 'elegoo-pla-red', logoFilamentId: 'red' }, catalogue), /black or pink/);
+  assert.throws(() => snapshotLid({ boxFilamentId: 'missing', logoFilamentId: 'red' }, catalogue), /black or pink/);
   const mail = readyEmail({
     orderNumber: 'MR-AAAAAAAA',
     name: 'Ada',
