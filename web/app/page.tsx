@@ -1,7 +1,16 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Crop, Printer, Search, Sparkles } from 'lucide-react';
-import BoxCarousel from './components/boxCarousel';
+import ShopVideoSection from './components/shopVideoSection';
+import {
+  accentPhoto,
+  galleryPhotos,
+  heroPhoto,
+  interiorPhotos,
+  lidPhoto,
+  windowPhoto,
+  type DeckPhoto,
+} from './lib/deckBoxPhotos';
 
 const STEPS = [
   {
@@ -26,9 +35,62 @@ const STEPS = [
   },
 ];
 
+const FEATURES: Array<{
+  eyebrow: string;
+  title: string;
+  body: string;
+  photos: DeckPhoto[];
+  flip?: boolean;
+}> = [
+  {
+    eyebrow: 'Window',
+    title: 'The window and the commander',
+    body: 'The front window holds the commander card. The same portrait continues around the sides as a multi-colour layered filament print.',
+    photos: [windowPhoto],
+  },
+  {
+    eyebrow: 'Inside',
+    title: 'Interior and token storage',
+    body: 'The deck sits in the box. A tray along the back keeps tokens with it, and the lid lifts off. The open tray on the right is an Elven Council box.',
+    photos: interiorPhotos,
+    flip: true,
+  },
+  {
+    eyebrow: 'Lid',
+    title: 'The lid',
+    body: 'A planeswalker symbol and the deck name are printed on the lid. It seats on the box and comes off when you play.',
+    photos: [lidPhoto],
+  },
+];
+
+function FramePhoto({
+  photo,
+  sizes,
+  priority = false,
+}: {
+  photo: DeckPhoto;
+  sizes: string;
+  priority?: boolean;
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-xl border border-white/10 bg-black ${photo.frame ?? 'aspect-[3/4]'}`}>
+      <Image
+        src={photo.src}
+        alt={photo.alt}
+        fill
+        sizes={sizes}
+        quality={75}
+        priority={priority}
+        loading={priority ? 'eager' : 'lazy'}
+        className={`object-cover ${photo.focus ?? 'object-center'}`}
+      />
+    </div>
+  );
+}
+
 export default function FrontPage() {
   return (
-    <div className="bg-[#12141f] font-serif text-white">
+    <main className="bg-[#12141f] font-serif text-white">
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(226,194,117,0.16),transparent_55%)]" />
         <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-2 lg:py-20">
@@ -38,7 +100,7 @@ export default function FrontPage() {
               Your commander, printed on the box.
             </h1>
             <p className="mt-4 max-w-xl font-sans text-base leading-relaxed text-gray-300 sm:text-lg">
-              Search the card, extend the art around the three faces, and we print a multi-colour filament deck box and ship it to you.
+              Search the card, extend the art around the three faces, and we print a multi-colour layered filament deck box and ship it to you.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -55,7 +117,17 @@ export default function FrontPage() {
               </Link>
             </div>
           </div>
-          <BoxCarousel />
+          <div className="relative mx-auto aspect-[3/4] w-full max-w-md overflow-hidden rounded-2xl border border-[#e2c275]/35 bg-black shadow-2xl shadow-black/40">
+            <Image
+              src={heroPhoto.src}
+              alt={heroPhoto.alt}
+              fill
+              priority
+              quality={75}
+              sizes="(min-width: 768px) 448px, 92vw"
+              className={`object-cover ${heroPhoto.focus ?? 'object-center'}`}
+            />
+          </div>
         </div>
       </section>
 
@@ -83,64 +155,80 @@ export default function FrontPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <h2 className="text-3xl font-bold text-[#f3e6c4]">Colour in the plastic</h2>
+        <h2 className="text-3xl font-bold text-[#f3e6c4]">Built for a commander deck</h2>
         <p className="mt-3 max-w-2xl font-sans text-gray-300">
-          These are boxes from the shop. The portrait is filament, not a sticker.
+          The picture on the box is a multi-colour layered filament print. Filament swaps through the thickness of the portrait, so the colour is in the plastic, not on a sticker.
         </p>
-        <div className="mt-10 space-y-12">
-          <article className="grid items-center gap-6 md:grid-cols-2">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10">
-              <Image
-                src="/images/1801181C-5A70-41EF-BFDA-E37758F04E91_1_105_c.jpeg"
-                alt="Three deck boxes showing multi-colour filament art on the sides"
-                fill
-                sizes="(min-width: 768px) 50vw, 100vw"
-                className="object-cover object-[center_40%]"
-              />
-            </div>
-            <div>
-              <h3 className="text-2xl font-semibold text-[#e2c275]">Multi-colour filament prints</h3>
-              <p className="mt-3 font-sans leading-relaxed text-gray-300">
-                Several filaments in one print. The swaps run through the height of the portrait, so the colour is in the plastic.
-              </p>
-            </div>
-          </article>
-          <article className="grid items-center gap-6 md:grid-cols-2">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 md:order-2">
-              <Image
-                src="/images/1F382F41-E88E-4192-815E-756C3A653F2D_1_105_c.jpeg"
-                alt="Close view of printed commander portraits on deck box sides"
-                fill
-                sizes="(min-width: 768px) 50vw, 100vw"
-                className="object-cover object-[center_36%]"
-              />
-            </div>
-            <div>
-              <h3 className="text-2xl font-semibold text-[#e2c275]">HueForge-quality detail</h3>
-              <p className="mt-3 font-sans leading-relaxed text-gray-300">
-                The portrait is built the HueForge way. Filament swaps through the thickness, and each colour blends by its transmission distance, so highlights and shadows read in the layers.
-              </p>
-            </div>
-          </article>
-          <article className="grid items-center gap-6 md:grid-cols-2">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10">
-              <Image
-                src="/images/19C48FF5-CF48-4199-9D53-A6DB3112BDC8_1_105_c.jpeg"
-                alt="Deck boxes with a commander card in the front window"
-                fill
-                sizes="(min-width: 768px) 50vw, 100vw"
-                className="object-cover object-[center_42%]"
-              />
-            </div>
-            <div>
-              <h3 className="text-2xl font-semibold text-[#e2c275]">Made for Commander</h3>
-              <p className="mt-3 font-sans leading-relaxed text-gray-300">
-                The front holds the commander. The same art continues around the sides of the box.
-              </p>
-            </div>
-          </article>
+        <div className="mt-10 space-y-14">
+          {FEATURES.map((feature) => (
+            <article key={feature.title} className="grid items-center gap-6 md:grid-cols-2 md:gap-10">
+              <div className={feature.flip ? 'md:order-2' : undefined}>
+                {feature.photos.length === 1 ? (
+                  <div className="mx-auto w-full max-w-md">
+                    <FramePhoto photo={feature.photos[0]} sizes="(min-width: 768px) 448px, 92vw" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {feature.photos.map((photo) => (
+                      <FramePhoto key={photo.src} photo={photo} sizes="(min-width: 768px) 280px, 46vw" />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className={feature.flip ? 'md:order-1' : undefined}>
+                <p className="font-sans text-xs font-semibold uppercase tracking-[0.18em] text-[#e2c275]">{feature.eyebrow}</p>
+                <h3 className="mt-2 text-2xl font-semibold text-[#f3e6c4]">{feature.title}</h3>
+                <p className="mt-3 font-sans leading-relaxed text-gray-300">{feature.body}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
+
+      <section className="border-t border-white/10 bg-[#0e121c]">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+          <h2 className="text-3xl font-bold text-[#f3e6c4]">From the bench</h2>
+          <p className="mt-3 max-w-2xl font-sans text-gray-300">
+            More angles of the same prints: the window, the open box, and the lid on the table.
+          </p>
+          <div className="mt-8 columns-2 gap-3 sm:columns-3 lg:columns-4">
+            {galleryPhotos.map((photo) => (
+              <figure key={photo.src} className="mb-3 break-inside-avoid">
+                <Image
+                  src={photo.src}
+                  alt={photo.alt}
+                  width={photo.width}
+                  height={photo.height}
+                  sizes="(min-width: 1024px) 280px, (min-width: 640px) 33vw, 50vw"
+                  quality={65}
+                  loading="lazy"
+                  style={{ width: '100%', height: 'auto' }}
+                  className="rounded-xl border border-white/10 bg-black/40"
+                />
+              </figure>
+            ))}
+          </div>
+          <figure className="mt-8 flex max-w-lg items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <Image
+              src={accentPhoto.src}
+              alt={accentPhoto.alt}
+              width={accentPhoto.width}
+              height={accentPhoto.height}
+              sizes="128px"
+              quality={75}
+              loading="lazy"
+              style={{ width: '128px', height: 'auto', maxWidth: '34vw' }}
+              className="shrink-0 rounded-lg border border-white/10"
+            />
+            <figcaption className="font-sans text-sm leading-relaxed text-gray-300">
+              <span className="block font-semibold text-[#e2c275]">Madame Coco</span>
+              A smaller pink box, held in hand, with the commander in the window.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <ShopVideoSection />
 
       <section className="border-t border-[#e2c275]/20 bg-[#1a1a2e]">
         <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-14 sm:px-6 md:flex-row md:items-center md:justify-between">
@@ -156,6 +244,6 @@ export default function FrontPage() {
           </Link>
         </div>
       </section>
-    </div>
+    </main>
   );
 }
