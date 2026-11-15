@@ -94,6 +94,17 @@ export class OrdersStack extends Stack {
       ephemeralStorageSize: Size.gibibytes(2),
       reservedConcurrentExecutions: 2,
       ...shared,
+      bundling: {
+        bundleAwsSDK: true,
+        commandHooks: {
+          beforeBundling(): string[] { return [] },
+          beforeInstall(): string[] { return [] },
+          afterBundling(_inputDir: string, outputDir: string): string[] {
+            const assets = join(__dirname, '../lambdas/generate/assets')
+            return [`mkdir -p ${outputDir}/assets`, `cp ${assets}/* ${outputDir}/assets/`]
+          },
+        },
+      },
     })
     const fail = new NodejsFunction(this, `${props.name}-FailOrder`, {
       entry: join(__dirname, '../lambdas', 'generate', 'fail.ts'),

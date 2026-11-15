@@ -6,6 +6,7 @@ import { profileToSettings, LAUNCH_PROFILES } from '../../../packages/print-core
 import { decodeBinaryStl } from '../../../packages/print-core/src/printGeometry';
 import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/hueforge';
 import { buildOrderZip } from './archive';
+import { buildLidPrint } from './lidPrint';
 
 function pngOf(width: number, height: number, bright: boolean): Uint8Array {
   const png = new PNG({ width, height });
@@ -53,4 +54,59 @@ test('the generator zip is full resolution and uses the shared mesh', async () =
   const manifest = JSON.parse(await zip.file('filament-layers.json')!.async('string')) as { print: { triangleCap: null; layerCount: number } };
   assert.equal(manifest.print.triangleCap, null);
   assert.equal(manifest.print.layerCount, 50);
+  assert.equal(zip.file('lid-base.stl'), null);
+});
+
+test('lid files are added beside the face plates and the face mesh is unchanged', async () => {
+  const settings = profileToSettings(LAUNCH_PROFILES[0]);
+  const bytes = pngOf(12, 16, true);
+  const png = PNG.sync.read(Buffer.from(bytes));
+  const rgba = new Uint8Array(png.data.buffer, png.data.byteOffset, png.data.byteLength);
+  const stops: CoreStop[] = [
+    { filament: { type: 'PLA', brand: 'Test', name: 'Blue', td: 4 }, rgb: hexToRgb('#2244AA'), endLayer: 50 },
+  ];
+  const faces = (['front', 'spine', 'back'] as const).map((name) => ({
+    name,
+    rgba,
+    width: png.width,
+    height: png.height,
+    cropPng: bytes,
+  }));
+  const plain = await buildOrderZip({ orderNumber: 'MR-AAAAAAAA', settings, stops, faces });
+  const lid = buildLidPrint({
+    boxFilamentId: 'elegoo-pla-black',
+    boxFilamentName: 'Elegoo PLA Black',
+    boxHex: '#161616',
+    logoFilamentId: 'elegoo-pla-red',
+    logoFilamentName: 'Elegoo PLA Red',
+    logoHex: '#D4252B',
+    text: 'Dom Fungus',
+    textFilamentId: 'giantarm-silk-silver',
+    textFilamentName: 'GiantArm Silk Silver',
+    textHex: '#D5DCE3',
+  });
+  const withLid = await buildOrderZip({ orderNumber: 'MR-AAAAAAAA', settings, stops, faces, lid });
+  const plainZip = await JSZip.loadAsync(plain);
+  const lidZip = await JSZip.loadAsync(withLid);
+  const plainFront = await plainZip.file('front.stl')!.async('uint8array');
+  const lidFront = await lidZip.file('front.stl')!.async('uint8array');
+  assert.deepEqual(lidFront, plainFront);
+  const body = await lidZip.file('box-body.stl')!.async('uint8array');
+  const base = await lidZip.file('lid-base.stl')!.async('uint8array');
+  const spark = await lidZip.file('lid-spark.stl')!.async('uint8array');
+  const text = await lidZip.file('lid-text.stl')!.async('uint8array');
+  assert.ok(decodeBinaryStl(body).length > 100);
+  assert.ok(decodeBinaryStl(base).length > 100);
+  assert.ok(decodeBinaryStl(spark).length > 10);
+  assert.ok(decodeBinaryStl(text).length > 10);
+  const note = await lidZip.file('lid-colours.txt')!.async('string');
+  assert.match(note, /Elegoo PLA Black/);
+  assert.match(note, /Dom Fungus/);
+  assert.equal(note.includes('HueForge'), false);
+  const manifest = JSON.parse(await lidZip.file('filament-layers.json')!.async('string')) as {
+    print: { triangleCap: null };
+    lid: { text: { value: string } };
+  };
+  assert.equal(manifest.print.triangleCap, null);
+  assert.equal(manifest.lid.text.value, 'Dom Fungus');
 });

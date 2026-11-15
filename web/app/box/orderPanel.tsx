@@ -4,7 +4,8 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Filament } from '../lib/filamentCatalogue';
 import type { ResolvedProfile } from '../lib/printGeometry';
-import { placeOrder, shopConfigured } from '../lib/shopOrders';
+import LidSummary from '../components/lidSummary';
+import { lidFromChoice, placeOrder, shopConfigured, type LidChoice } from '../lib/shopOrders';
 
 type Props = {
   crops: [string, string, string];
@@ -15,11 +16,12 @@ type Props = {
   profiles: ResolvedProfile[];
   onProfile: (id: string) => void;
   faceSizes: Array<{ widthMm: number; heightMm: number } | null>;
+  lid: LidChoice | null;
 };
 
 const FACES = ['Front', 'Spine', 'Back'];
 
-export default function OrderPanel({ crops, previews, layers, stops, profile, profiles, onProfile, faceSizes }: Props) {
+export default function OrderPanel({ crops, previews, layers, stops, profile, profiles, onProfile, faceSizes, lid }: Props) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -51,6 +53,7 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
         stops,
         crops,
         previews: previews[0] ? previews : crops,
+        lid: lid ?? undefined,
       });
       const params = new URLSearchParams({ order: order.orderNumber, email: order.email });
       router.push(`/receipt?${params.toString()}`);
@@ -96,6 +99,7 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
 
       <div>
         <h2 className="text-sm font-semibold text-[#e2c275]">Order</h2>
+        {lid && <div className="mt-3"><LidSummary lid={lidFromChoice(lid)} /></div>}
         <p className="mt-1 text-xs text-gray-400">
           We print the box. You get a receipt and a tracking page. Print files stay with the shop.
           {' '}

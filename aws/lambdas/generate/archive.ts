@@ -62,11 +62,21 @@ export function decodePng(bytes: Uint8Array): { rgba: Uint8Array; width: number;
   return { rgba: new Uint8Array(png.data.buffer, png.data.byteOffset, png.data.byteLength), width: png.width, height: png.height };
 }
 
+export type ArchiveLid = {
+  boxBody: Uint8Array;
+  base: Uint8Array;
+  spark: Uint8Array;
+  text?: Uint8Array | null;
+  coloursText: string;
+  manifest: Record<string, unknown>;
+};
+
 export async function buildOrderZip(input: {
   orderNumber: string;
   settings: PrintSettings;
   stops: readonly CoreStop[];
   faces: readonly ArchiveFace[];
+  lid?: ArchiveLid | null;
 }): Promise<Buffer> {
   if (input.faces.length !== 3) throw new Error('Three faces are required');
   const zip = new JSZip();
@@ -126,6 +136,14 @@ export async function buildOrderZip(input: {
     });
   }
 
+  if (input.lid) {
+    zip.file('box-body.stl', input.lid.boxBody);
+    zip.file('lid-base.stl', input.lid.base);
+    zip.file('lid-spark.stl', input.lid.spark);
+    if (input.lid.text) zip.file('lid-text.stl', input.lid.text);
+    zip.file('lid-colours.txt', input.lid.coloursText);
+  }
+
   zip.file('filament-layers.json', JSON.stringify({
     note: 'One full-resolution HueForge colour-core STL per face. Customers do not receive this zip.',
     luminance: 'BT.601 luminance, smoothed by one 3x3 at a 0.10 mm detail size (coarser grids keep that blur width), stretched from black to white, then shifted by brightnessAdjust and clamped. Heights run from min depth to the top of the colour core. The +X and +Y edges are a one-cell lip at layer height and the back is flat at Z 0.',
@@ -159,6 +177,7 @@ export async function buildOrderZip(input: {
       td: stop.filament.td,
     })),
     faces,
+    lid: input.lid?.manifest ?? null,
   }, null, 2));
 
   return zip.generateAsync({ type: 'nodebuffer', compression: 'STORE' });

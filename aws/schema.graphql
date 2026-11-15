@@ -112,6 +112,27 @@ type OrderHistoryEntry {
   note: String
 }
 
+# Shell, lid, spark, and optional name. Additive. Older orders leave it null.
+type OrderLid {
+  boxFilamentId: String!
+  boxFilamentName: String!
+  boxHex: String!
+  logoFilamentId: String!
+  logoFilamentName: String!
+  logoHex: String!
+  text: String
+  textFilamentId: String
+  textFilamentName: String
+  textHex: String
+}
+
+input OrderLidInput {
+  boxFilamentId: String!
+  logoFilamentId: String!
+  text: String
+  textFilamentId: String
+}
+
 type OrderSummary {
   orderId: ID!
   orderNumber: String!
@@ -161,6 +182,7 @@ type OrderDetail {
   history: [OrderHistoryEntry!]!
   stops: [OrderStop!]!
   previewUrls: [String!]!
+  lid: OrderLid
   downloadUrl: String
   downloadExpiresAt: String
   profileSnapshotJson: String
@@ -222,6 +244,8 @@ input SubmitOrderInput {
   stops: [OrderStopInput!]!
   crops: [UploadSlotInput!]!
   previews: [UploadSlotInput!]!
+  # Optional so an older client can still submit. The designer always sends it.
+  lid: OrderLidInput
 }
 
 type OutpaintResult {

@@ -1,3 +1,4 @@
+import { normalizeLidText } from '../../../packages/print-core/src/lidText';
 import { layerTopMm } from './hueforge';
 import type { Filament } from './filamentCatalogue';
 import type { NozzleProfile, ResolvedProfile } from './printGeometry';
@@ -52,7 +53,49 @@ export type ShopOrder = {
   carrier?: string;
   trackingNumber?: string;
   downloadUrl?: string;
+  lid?: ShopLid | null;
 };
+
+export type ShopLid = {
+  boxFilamentId: string;
+  boxFilamentName: string;
+  boxHex: string;
+  logoFilamentId: string;
+  logoFilamentName: string;
+  logoHex: string;
+  text?: string | null;
+  textFilamentId?: string | null;
+  textFilamentName?: string | null;
+  textHex?: string | null;
+};
+
+export type LidChoice = {
+  box: Filament;
+  logo: Filament;
+  textFilament: Filament;
+  text: string;
+};
+
+export function lidFromChoice(choice: LidChoice): ShopLid {
+  let text = '';
+  try {
+    text = normalizeLidText(choice.text);
+  } catch {
+    text = choice.text.trim().slice(0, 20);
+  }
+  return {
+    boxFilamentId: choice.box.id,
+    boxFilamentName: choice.box.name,
+    boxHex: choice.box.hex,
+    logoFilamentId: choice.logo.id,
+    logoFilamentName: choice.logo.name,
+    logoHex: choice.logo.hex,
+    text: text || null,
+    textFilamentId: text ? choice.textFilament.id : null,
+    textFilamentName: text ? choice.textFilament.name : null,
+    textHex: text ? choice.textFilament.hex : null,
+  };
+}
 
 const ORDER_KEY = 'mtg-shop-orders';
 const PROFILE_KEY = 'mtg-shop-profiles';
@@ -131,6 +174,7 @@ export type PlaceOrderInput = {
   stops: number[];
   crops: [string, string, string];
   previews: [string, string, string];
+  lid?: LidChoice;
 };
 
 function stopsFrom(layers: Filament[], endLayers: number[], profile: ResolvedProfile): ShopStop[] {
@@ -200,6 +244,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ShopOrder> {
     region: input.region,
     postalCode: input.postalCode,
     country: input.country,
+    lid: input.lid ? lidFromChoice(input.lid) : null,
   };
   writeOrders([order, ...readOrders()]);
   return order;
@@ -217,6 +262,7 @@ export async function trackOrder(orderNumber: string, email: string): Promise<Sh
           addressLine1 city region postalCode country previewUrls
           history { status at actor note }
           stops { filamentId name hex td type brand endLayer depthMm }
+          lid { boxFilamentId boxFilamentName boxHex logoFilamentId logoFilamentName logoHex text textFilamentId textFilamentName textHex }
         }
       }`,
       { orderNumber: number, email: normalized },
@@ -262,6 +308,7 @@ export async function loadOrder(orderId: string): Promise<ShopOrder | null> {
           addressLine1 city region postalCode country previewUrls downloadUrl
           history { status at actor note }
           stops { filamentId name hex td type brand endLayer depthMm }
+          lid { boxFilamentId boxFilamentName boxHex logoFilamentId logoFilamentName logoHex text textFilamentId textFilamentName textHex }
         }
       }`,
       { orderId },
@@ -450,6 +497,12 @@ async function placeRemote(input: PlaceOrderInput): Promise<ShopOrder> {
         })),
         crops: crops.map(({ width, height, byteLength }) => ({ width, height, byteLength })),
         previews: previews.map(({ width, height, byteLength }) => ({ width, height, byteLength })),
+        lid: input.lid ? {
+          boxFilamentId: input.lid.box.id,
+          logoFilamentId: input.lid.logo.id,
+          text: normalizeLidText(input.lid.text) || null,
+          textFilamentId: normalizeLidText(input.lid.text) ? input.lid.textFilament.id : null,
+        } : null,
       },
     },
     'key',

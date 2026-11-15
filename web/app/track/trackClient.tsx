@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { trackOrder, type ShopOrder } from '../lib/shopOrders';
+import LidSummary from '../components/lidSummary';
 
 export default function TrackClient() {
   const params = useSearchParams();
@@ -60,6 +61,7 @@ export default function TrackClient() {
                 <li key={`${entry.at}-${index}`}>{entry.at.slice(0, 16).replace('T', ' ')} · {entry.status.replaceAll('_', ' ').toLowerCase()}{entry.note ? ` · ${entry.note}` : ''}</li>
               ))}
             </ol>
+            {order.lid && <div className="mt-3"><LidSummary lid={order.lid} /></div>}
             {order.previews.some(Boolean) && (
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {order.previews.map((src, index) => src ? <img key={index} src={src} alt="" className="w-full rounded" /> : null)}

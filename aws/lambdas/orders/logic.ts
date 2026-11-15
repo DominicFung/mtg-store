@@ -1,4 +1,5 @@
 import { colorCoreLayerCount, layerTopMm } from '../../../packages/print-core/src/hueforge';
+import { normalizeLidText } from '../../../packages/print-core/src/lidText';
 import { isOrderNumber, newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
 import {
   profileToSettings,
@@ -62,6 +63,27 @@ export type UploadSlotInput = {
   byteLength: number;
 };
 
+export type LidInput = {
+  boxFilamentId: string;
+  logoFilamentId: string;
+  text?: string;
+  textFilamentId?: string;
+};
+
+/** Filament choices for the shell, the lid, the spark, and the optional name. */
+export type LidFinish = {
+  boxFilamentId: string;
+  boxFilamentName: string;
+  boxHex: string;
+  logoFilamentId: string;
+  logoFilamentName: string;
+  logoHex: string;
+  text: string | null;
+  textFilamentId: string | null;
+  textFilamentName: string | null;
+  textHex: string | null;
+};
+
 export type SubmitInput = {
   clientRequestId: string;
   email: string;
@@ -76,6 +98,7 @@ export type SubmitInput = {
   stops: OrderStopInput[];
   crops: UploadSlotInput[];
   previews: UploadSlotInput[];
+  lid?: LidInput;
 };
 
 export type CatalogueFilament = {
@@ -215,6 +238,20 @@ export function parseSubmitInput(raw: unknown): SubmitInput {
     stops,
     crops: cropsRaw.map((slot, index) => assertSlot(slot, `Face ${index + 1}`)),
     previews: previewsRaw.map((slot, index) => assertSlot(slot, `Preview ${index + 1}`)),
+    lid: parseLid(input.lid),
+  };
+}
+
+function parseLid(value: unknown): LidInput | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object') throw new Error('Lid colours are invalid');
+  const lid = value as Record<string, unknown>;
+  const text = normalizeLidText(lid.text);
+  return {
+    boxFilamentId: requiredText(lid.boxFilamentId, 'Box colour', 80),
+    logoFilamentId: requiredText(lid.logoFilamentId, 'Logo colour', 80),
+    text: text || undefined,
+    textFilamentId: text ? requiredText(lid.textFilamentId, 'Name colour', 80) : undefined,
   };
 }
 
@@ -242,6 +279,42 @@ export function snapshotStops(
       depthMm: layerTopMm(stop.endLayer, profile),
     };
   });
+}
+
+export function snapshotLid(lid: LidInput, catalogue: readonly CatalogueFilament[]): LidFinish {
+  const byId = new Map(catalogue.map((filament) => [filament.id, filament]));
+  const box = byId.get(lid.boxFilamentId);
+  const logo = byId.get(lid.logoFilamentId);
+  if (!box) throw new Error('Unknown filament for the box colour');
+  if (!logo) throw new Error('Unknown filament for the Magic logo');
+  const text = lid.text?.trim() ? lid.text.trim() : null;
+  const textFilament = text ? byId.get(lid.textFilamentId ?? '') : undefined;
+  if (text && !textFilament) throw new Error('Unknown filament for the name on the lid');
+  return {
+    boxFilamentId: box.id,
+    boxFilamentName: box.name,
+    boxHex: box.hex,
+    logoFilamentId: logo.id,
+    logoFilamentName: logo.name,
+    logoHex: logo.hex,
+    text,
+    textFilamentId: textFilament?.id ?? null,
+    textFilamentName: textFilament?.name ?? null,
+    textHex: textFilament?.hex ?? null,
+  };
+}
+
+export function lidColourLines(lid: LidFinish): string[] {
+  const lines = [
+    `Box and lid: ${lid.boxFilamentName} (${lid.boxHex})`,
+    `Magic logo: ${lid.logoFilamentName} (${lid.logoHex})`,
+  ];
+  if (lid.text && lid.textFilamentName) {
+    lines.push(`Name on the lid: ${lid.text} in ${lid.textFilamentName} (${lid.textHex})`);
+  } else {
+    lines.push('Name on the lid: none');
+  }
+  return lines;
 }
 
 export function settingsFromProfile(profile: NozzleProfile): PrintSettings {
@@ -304,18 +377,32 @@ export function generationDecision(order: {
   return 'skip';
 }
 
-export function readyEmail(input: { orderNumber: string; name: string; downloadUrl: string; expiresHours: number }): { subject: string; text: string } {
+export function readyEmail(input: {
+  orderNumber: string;
+  name: string;
+  downloadUrl: string;
+  expiresHours: number;
+  lid?: LidFinish | null;
+}): { subject: string; text: string } {
+  const lines = [
+    `${input.name} ordered a Commander Deck Box, ${input.orderNumber}. The print files are ready.`,
+    '',
+    `Download (link expires in ${input.expiresHours} hours; generate a new one from the admin page):`,
+    input.downloadUrl,
+    '',
+    'The zip holds front.stl, spine.stl, back.stl, a details.txt per face, filament-layers.json, and the six record images.',
+  ];
+  if (input.lid) {
+    lines.push(
+      'It also holds box-body.stl, lid-base.stl, and lid-spark.stl. lid-text.stl is included when the lid has a name. lid-colours.txt names the filament for each file.',
+      '',
+      ...lidColourLines(input.lid),
+    );
+  }
+  lines.push('Payments are not collected in the shop yet.');
   return {
     subject: `Mana Ramp ${input.orderNumber} is ready to print`,
-    text: [
-      `${input.name} ordered a Commander Deck Box, ${input.orderNumber}. The colour-core STLs are ready.`,
-      '',
-      `Download (link expires in ${input.expiresHours} hours; generate a new one from the admin page):`,
-      input.downloadUrl,
-      '',
-      'The zip holds front.stl, spine.stl, back.stl, a details.txt per face, filament-layers.json, and the six record images.',
-      'Payments are not collected in the shop yet.',
-    ].join('\n'),
+    text: lines.join('\n'),
   };
 }
 
