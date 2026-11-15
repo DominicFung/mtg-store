@@ -61,8 +61,25 @@ export const PRINT_SETTINGS_ID = 'default';
 /** Keeps a phone from allocating a multi-hundred-megabyte mesh. */
 export const MAX_MESH_TRIANGLES = 180_000;
 
-export const FACE_NAMES = ['front', 'spine', 'back'] as const;
+/** Art plates, in wrap order: left side, spine (the back), right side. The card window is the front and has no plate. */
+export const FACE_NAMES = ['left', 'spine', 'right'] as const;
 export type FaceName = (typeof FACE_NAMES)[number];
+
+/**
+ * Crop index 0 was stored as "front" and index 2 as "back" before the plates
+ * were renamed. Those images are the left and right sides.
+ */
+const LEGACY_FACE_NAMES: Record<string, FaceName> = {
+  front: 'left',
+  back: 'right',
+  left: 'left',
+  right: 'right',
+  spine: 'spine',
+};
+
+export function canonicalFaceName(name: string): FaceName | null {
+  return LEGACY_FACE_NAMES[name] ?? null;
+}
 
 export function umToMm(um: number): number {
   return um / 1000;
@@ -73,8 +90,8 @@ export function roundMm(mm: number): number {
 }
 
 /**
- * Model width follows the crop. 105.45 × 650/724 = 94.67 (right face) and
- * 105.45 × 480/614 = 82.44 (back face).
+ * Model width follows the crop. 105.45 × 650/724 = 94.67 (a side face) and
+ * 105.45 × 480/614 = 82.44 (the spine).
  */
 /** Shrink both axes when the aspect-fit width exceeds the profile bound. */
 export function clampToMaxWidth(

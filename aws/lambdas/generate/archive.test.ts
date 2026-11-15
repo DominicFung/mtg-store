@@ -32,7 +32,7 @@ test('the generator zip is full resolution and uses the shared mesh', async () =
     orderNumber: 'MR-AAAAAAAA',
     settings,
     stops,
-    faces: (['front', 'spine', 'back'] as const).map((name) => ({
+    faces: (['left', 'spine', 'right'] as const).map((name) => ({
       name,
       rgba,
       width: png.width,
@@ -41,7 +41,7 @@ test('the generator zip is full resolution and uses the shared mesh', async () =
     })),
   });
   const zip = await JSZip.loadAsync(zipBytes);
-  for (const face of ['front', 'spine', 'back']) {
+  for (const face of ['left', 'spine', 'right']) {
     const stl = await zip.file(`${face}.stl`)?.async('uint8array');
     assert.ok(stl && stl.byteLength > 84);
     const triangles = decodeBinaryStl(stl);
@@ -88,9 +88,14 @@ test('lid files are added beside the face plates and the face mesh is unchanged'
   const withLid = await buildOrderZip({ orderNumber: 'MR-AAAAAAAA', settings, stops, faces, lid });
   const plainZip = await JSZip.loadAsync(plain);
   const lidZip = await JSZip.loadAsync(withLid);
-  const plainFront = await plainZip.file('front.stl')!.async('uint8array');
-  const lidFront = await lidZip.file('front.stl')!.async('uint8array');
-  assert.deepEqual(lidFront, plainFront);
+  assert.equal(plainZip.file('front.stl'), null);
+  assert.equal(plainZip.file('back.stl'), null);
+  const plainLeft = await plainZip.file('left.stl')!.async('uint8array');
+  const lidLeft = await lidZip.file('left.stl')!.async('uint8array');
+  assert.deepEqual(lidLeft, plainLeft);
+  assert.ok(lidZip.file('right.stl'));
+  const manifestFaces = JSON.parse(await plainZip.file('filament-layers.json')!.async('string')) as { faces: Array<{ face: string }> };
+  assert.deepEqual(manifestFaces.faces.map((face) => face.face), ['left', 'spine', 'right']);
   const body = await lidZip.file('box-body.stl')!.async('uint8array');
   const base = await lidZip.file('lid-base.stl')!.async('uint8array');
   const spark = await lidZip.file('lid-spark.stl')!.async('uint8array');

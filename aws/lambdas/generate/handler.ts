@@ -9,7 +9,7 @@ import { getOrder, notifyOwner, presignGet, requiredEnv, s3, updateOrder } from 
 import { buildOrderZip, decodePng } from './archive';
 import type { OrderItem } from '../orders/view';
 
-const FACES: FaceName[] = ['front', 'spine', 'back'];
+const FACES: FaceName[] = ['left', 'spine', 'right'];
 
 function isLidFinish(value: unknown): value is LidFinish {
   if (!value || typeof value !== 'object') return false;

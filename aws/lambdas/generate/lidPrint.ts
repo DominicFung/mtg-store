@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { encodeBinaryStl, decodeBinaryStl } from '../../../packages/print-core/src/printGeometry';
-import { buildLidTextMesh, splitLid } from '../../../packages/print-core/src/lidGeometry';
+import { buildLidTextMesh, LID_FONT_FILE, splitLid } from '../../../packages/print-core/src/lidGeometry';
 import { lidColourLines, type LidFinish } from '../orders/logic';
 
 export type LidPrintFiles = {
@@ -28,7 +28,7 @@ function stamp(bytes: Uint8Array, header: string): Uint8Array {
 export function buildLidPrint(lid: LidFinish): LidPrintFiles {
   const lidTriangles = decodeBinaryStl(new Uint8Array(asset('Lid.stl')));
   const parts = splitLid(lidTriangles, true);
-  const fontBytes = asset('Oswald-Bold.ttf');
+  const fontBytes = asset(LID_FONT_FILE);
   const font = fontBytes.buffer.slice(fontBytes.byteOffset, fontBytes.byteOffset + fontBytes.byteLength);
   const textTriangles = lid.text ? buildLidTextMesh(font, lid.text) : [];
   const text = textTriangles.length > 0 ? encodeBinaryStl(textTriangles, 'Mana Ramp lid text') : null;
@@ -48,7 +48,7 @@ export function buildLidPrint(lid: LidFinish): LidPrintFiles {
   } else {
     lines.push('No name on the lid.', '');
   }
-  lines.push('The face plates are front.stl, spine.stl, and back.stl.', ...lidColourLines(lid).map((line) => line));
+  lines.push('The face plates are left.stl, spine.stl, and right.stl.', ...lidColourLines(lid).map((line) => line));
   return {
     boxBody: stamp(new Uint8Array(asset('edh_box.stl')), `box ${lid.boxFilamentName}`),
     base: encodeBinaryStl(parts.base, 'Mana Ramp lid base'),

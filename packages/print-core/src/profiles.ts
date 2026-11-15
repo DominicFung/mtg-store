@@ -17,7 +17,7 @@ export type NozzleProfile = LayerSettings & {
   borderDepth: number;
   /** HueForge smoothing slider. 4 is one 3×3 on a 0.10 mm grid and no extra blur on a 0.20 mm grid. */
   smoothing: number;
-  /** Aspect-fit clamp. The 0.2 mm plates are wider than the nominal back face. */
+  /** Aspect-fit clamp. The 0.2 mm plates are wider than the nominal spine. */
   maxWidth: number;
   /** Shared face height, in millimetres. */
   maxHeight: number;

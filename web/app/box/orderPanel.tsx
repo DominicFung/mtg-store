@@ -19,7 +19,7 @@ type Props = {
   lid: LidChoice | null;
 };
 
-const FACES = ['Front', 'Spine', 'Back'];
+const FACES = ['Left', 'Spine', 'Right'];
 
 export default function OrderPanel({ crops, previews, layers, stops, profile, profiles, onProfile, faceSizes, lid }: Props) {
   const router = useRouter();

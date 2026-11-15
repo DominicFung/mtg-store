@@ -22,7 +22,7 @@ interface Props {
   onError?: (message: string) => void;
 }
 
-const FACE_LABELS = ['Front', 'Spine', 'Back'];
+const FACE_LABELS = ['Left', 'Spine', 'Right'];
 
 const HANDLE = {
   width: 28,

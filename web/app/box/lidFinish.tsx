@@ -98,7 +98,8 @@ export default function LidFinish({
           spellCheck={false}
           placeholder="Dom Fungus"
           onChange={(event) => onName(cleanLidText(event.target.value))}
-          className="mt-2 min-h-11 w-full rounded-md border border-white/15 bg-[#12182c] px-3 text-sm"
+          className="mt-2 min-h-11 w-full rounded-md border border-white/15 bg-[#12182c] px-3 text-lg"
+          style={{ fontFamily: '"MagicMedieval", serif' }}
         />
         <p className="mt-1 text-right text-[10px] text-gray-500">{name.length}/20</p>
       </div>

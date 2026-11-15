@@ -1,8 +1,13 @@
-/** Optional name on the lid. Letters, numbers, spaces, and simple punctuation. */
+/** Optional name on the lid. MagicMedieval has no plus sign. */
 export const LID_TEXT_MAX = 20;
 
+/** Bundled with the shop and the generator. Family MagicMedieval, Regular. */
+export const LID_FONT_FILE = 'MagicMedieval-Regular.ttf';
+
+const LID_TEXT_UNSUPPORTED = /[^A-Za-z0-9 '&.,-]/;
+
 export function cleanLidText(raw: string): string {
-  return raw.replace(/[^A-Za-z0-9 '&.,+-]/g, '').slice(0, LID_TEXT_MAX);
+  return raw.replace(LID_TEXT_UNSUPPORTED, '').slice(0, LID_TEXT_MAX);
 }
 
 export function normalizeLidText(raw: unknown): string {
@@ -11,8 +16,8 @@ export function normalizeLidText(raw: unknown): string {
   const text = raw.trim().replace(/\s+/g, ' ');
   if (!text) return '';
   if (text.length > LID_TEXT_MAX) throw new Error('The lid name can be at most 20 characters');
-  if (/[^A-Za-z0-9 '&.,+-]/.test(text)) {
-    throw new Error('The lid name can use letters, numbers, and simple punctuation');
+  if (LID_TEXT_UNSUPPORTED.test(text)) {
+    throw new Error('The lid name can use letters, numbers, spaces, and . , \' & -');
   }
   return text;
 }

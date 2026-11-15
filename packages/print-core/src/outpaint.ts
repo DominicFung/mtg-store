@@ -1,4 +1,4 @@
-/** Three box faces: front 293, spine 255, back 293, height 326. */
+/** Three art faces: left 293, spine 255, right 293, height 326. The card window is the front. */
 export const BOX_FACE_WIDTHS = [293, 255, 293] as const;
 export const BOX_FACE_HEIGHT = 326;
 export const BOX_WRAP_WIDTH = BOX_FACE_WIDTHS[0] + BOX_FACE_WIDTHS[1] + BOX_FACE_WIDTHS[2];
@@ -7,11 +7,11 @@ export const WRAP_ASPECT = BOX_WRAP_WIDTH / BOX_FACE_HEIGHT;
 /** Stability Image Outpaint allows at most 2000 pixels on a side. */
 export const STABILITY_MAX_MARGIN = 2000;
 
-const FRONT_END = BOX_FACE_WIDTHS[0] / BOX_WRAP_WIDTH;
-const BACK_START = (BOX_FACE_WIDTHS[0] + BOX_FACE_WIDTHS[1]) / BOX_WRAP_WIDTH;
+const LEFT_END = BOX_FACE_WIDTHS[0] / BOX_WRAP_WIDTH;
+const RIGHT_START = (BOX_FACE_WIDTHS[0] + BOX_FACE_WIDTHS[1]) / BOX_WRAP_WIDTH;
 
 export type ExtendSide = 'left' | 'right';
-export type OuterFace = 'front' | 'back';
+export type OuterFace = 'left' | 'right';
 export type OutpaintMargins = { left: number; right: number; up: number; down: number };
 export type RgbaImage = { rgba: Uint8Array; width: number; height: number };
 export type SubjectBounds = { left: number; right: number; center: number };
@@ -19,15 +19,15 @@ export type CropRect = { x: number; y: number; width: number; height: number };
 
 /**
  * Which way to grow the canvas. A subject on the left is extended to the right
- * so they stay on the front face; a subject on the right is extended to the left
- * so they stay on the back. A centred subject (Brigid) is kept on the front.
+ * so they stay on the left face; a subject on the right is extended to the left
+ * so they stay on the right. A centred subject (Brigid) is kept on the left.
  */
 export function extendSideForSubject(subjectX: number): ExtendSide {
   return subjectX > 0.5 ? 'left' : 'right';
 }
 
 export function outerFaceForSide(side: ExtendSide): OuterFace {
-  return side === 'right' ? 'front' : 'back';
+  return side === 'right' ? 'left' : 'right';
 }
 
 /** Move original-image fractions into the extended canvas. */
@@ -123,7 +123,7 @@ export function outpaintMargins(
 
 /**
  * Repeats the near edge on one side until the frame can hold the subject on
- * the front (extend right) or the back (extend left).
+ * the left (extend right) or the right (extend left).
  */
 export function extendToAspect(image: RgbaImage, aspect = WRAP_ASPECT, side?: ExtendSide): RgbaImage {
   const { rgba, width, height } = image;
@@ -155,14 +155,14 @@ export function extendToAspect(image: RgbaImage, aspect = WRAP_ASPECT, side?: Ex
 }
 
 /**
- * Largest three-face crop that keeps the subject inside the front face when
- * they sit on the left, or the back face when they sit on the right.
+ * Largest three-face crop that keeps the subject inside the left face when
+ * they sit on the left, or the right face when they sit on the right.
  */
 export function defaultCropBox(imageWidth: number, imageHeight: number, subject: SubjectBounds): CropRect {
   if (imageWidth < 1 || imageHeight < 1) return { x: 0, y: 0, width: 0, height: 0 };
-  const face: OuterFace = subject.center <= 0.5 ? 'front' : 'back';
-  const faceStart = face === 'front' ? 0 : BACK_START;
-  const faceEnd = face === 'front' ? FRONT_END : 1;
+  const face: OuterFace = subject.center <= 0.5 ? 'left' : 'right';
+  const faceStart = face === 'left' ? 0 : RIGHT_START;
+  const faceEnd = face === 'left' ? LEFT_END : 1;
   const scale = Math.min(imageWidth / BOX_WRAP_WIDTH, imageHeight / BOX_FACE_HEIGHT);
   let width = BOX_WRAP_WIDTH * scale;
   let height = BOX_FACE_HEIGHT * scale;
@@ -197,12 +197,12 @@ export function defaultCropBox(imageWidth: number, imageHeight: number, subject:
   return { x, y, width, height };
 }
 
-export function faceAtX(crop: CropRect, x: number): 'front' | 'spine' | 'back' {
+export function faceAtX(crop: CropRect, x: number): 'left' | 'spine' | 'right' {
   if (crop.width <= 0) return 'spine';
   const rel = (x - crop.x) / crop.width;
-  if (rel < FRONT_END) return 'front';
-  if (rel < BACK_START) return 'spine';
-  return 'back';
+  if (rel < LEFT_END) return 'left';
+  if (rel < RIGHT_START) return 'spine';
+  return 'right';
 }
 
 function extensionPixels(
@@ -214,7 +214,7 @@ function extensionPixels(
 ): number {
   if (width < 1 || height < 1) return 0;
   const frameW = Math.max(1, Math.round(height * aspect));
-  const facePx = FRONT_END * frameW;
+  const facePx = LEFT_END * frameW;
   const focus = focusSpan(subject, width, facePx);
   const extra = side === 'left'
     ? extraOnLeft(width, frameW, focus.left)
@@ -222,16 +222,16 @@ function extensionPixels(
   return Math.max(0, Math.min(STABILITY_MAX_MARGIN, extra));
 }
 
-/** Padding on the right so [0, rightPx] can sit in the front face of the frame. */
+/** Padding on the right so [0, rightPx] can sit in the left face of the frame. */
 function extraOnRight(width: number, frameW: number, rightPx: number): number {
-  const frontW = FRONT_END * frameW;
+  const frontW = LEFT_END * frameW;
   const lo = Math.max(0, rightPx - frontW);
   return Math.max(0, Math.ceil(lo + frameW - width));
 }
 
-/** Padding on the left so the subject can sit in the back face of the frame. */
+/** Padding on the left so the subject can sit in the right face of the frame. */
 function extraOnLeft(width: number, frameW: number, leftPx: number): number {
-  const backStart = BACK_START * frameW;
+  const backStart = RIGHT_START * frameW;
   const needForFrame = Math.max(0, frameW - width);
   const needToClearSpine = Math.max(0, Math.ceil(backStart - leftPx));
   return Math.max(needForFrame, needToClearSpine);
