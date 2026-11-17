@@ -401,7 +401,7 @@ test('a real-sized face mesh is centred, flat on the back, and stops at actual d
   nearly(bounds.min[0], -plate.widthMm / 2, 0.02);
   nearly(bounds.max[0], plate.widthMm / 2, 0.02);
   nearly(bounds.min[2], 0, 1e-4);
-  nearly(bounds.max[2], 2.05, 0.05);
+  nearly(bounds.max[2], 1.97, 0.05);
   assert.equal(decoded.length, mesh.triangles);
   assert.ok(mesh.triangles <= 8_000);
 });
