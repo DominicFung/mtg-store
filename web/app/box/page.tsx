@@ -15,6 +15,7 @@ import LidFinish, {
   filamentById,
 } from './lidFinish';
 import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
+import { clampLidOpen } from '../../../packages/print-core/src/lidGeometry';
 import type { ExtendSide, SubjectBounds } from '../../../packages/print-core/src/outpaint';
 import { useFilaments } from '../lib/filaments';
 import {
@@ -164,7 +165,7 @@ export default function Home() {
     setPreviewReady(true);
     setLidName(query.get('name') || 'Dom Fungus');
     const open = query.get('open');
-    setLidOpen(nextShot === 'open' ? 0.72 : open ? Number(open) : 0);
+    setLidOpen(clampLidOpen(nextShot === 'open' ? 0.72 : open ? Number(open) : 0));
     if (useExample) return;
     const paint = (label: string, fill: string, width: number) => {
       const canvas = document.createElement('canvas');
@@ -570,7 +571,7 @@ export default function Home() {
                 onLogo={setLogoFilamentId}
                 onTextColour={setTextFilamentId}
                 onName={setLidName}
-                onOpen={setLidOpen}
+                onOpen={(value) => setLidOpen(clampLidOpen(value))}
               />
               {layered[0] && (
                 <div className="mt-3 grid grid-cols-3 gap-2">

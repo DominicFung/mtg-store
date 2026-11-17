@@ -6,7 +6,7 @@ import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { SHELL_FACE_CROP, WRAP_PLATES, type WrapPlate } from '../../../packages/print-core/src/boxWrap';
 import { decodeBinaryStl, type Triangle } from '../../../packages/print-core/src/printGeometry';
-import { buildLidTextMesh, LID_FONT_FILE, LID_SIZE, lidLocalToGlb, lidSlideOffset, splitLid } from '../../../packages/print-core/src/lidGeometry';
+import { buildLidTextMesh, clampLidOffset, LID_FONT_FILE, LID_SIZE, lidLocalToGlb, lidSlideOffset, splitLid } from '../../../packages/print-core/src/lidGeometry';
 import type { ReliefBuffers } from '../lib/reliefClient';
 
 interface Props {
@@ -81,15 +81,23 @@ function geometryFromTriangles(triangles: readonly Triangle[], mirrorX = false):
   return geometry;
 }
 
+const SEATED_LID_POSITION: [number, number, number] = [0, 0, lidSlideOffset(0)];
+
 function SlidingLid({ open, children }: { open: number; children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   const current = useRef(lidSlideOffset(open));
+  useLayoutEffect(() => {
+    current.current = clampLidOffset(current.current);
+    if (ref.current) ref.current.position.z = clampLidOffset(ref.current.position.z);
+  }, []);
   useFrame((_, delta) => {
     const target = lidSlideOffset(open);
-    current.current += (target - current.current) * (1 - Math.exp(-8 * delta));
+    const step = 1 - Math.exp(-8 * Math.max(0, delta));
+    const blended = current.current + (target - current.current) * Math.min(1, step);
+    current.current = clampLidOffset(blended);
     if (ref.current) ref.current.position.z = current.current;
   });
-  return <group ref={ref}>{children}</group>;
+  return <group ref={ref} position={SEATED_LID_POSITION}>{children}</group>;
 }
 
 function LidMeshes({

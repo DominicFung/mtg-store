@@ -1,6 +1,7 @@
 'use client';
 
 import { BOX_FILAMENT_IDS } from '../../../packages/print-core/src/boxColours';
+import { clampLidOpen } from '../../../packages/print-core/src/lidGeometry';
 import { cleanLidText } from '../../../packages/print-core/src/lidText';
 import type { Filament } from '../lib/filamentCatalogue';
 
@@ -73,7 +74,7 @@ export default function LidFinish({
           aria-valuemax={100}
           aria-valuenow={Math.round(open * 100)}
           aria-valuetext={open < 0.08 ? 'Closed' : open > 0.92 ? 'Open' : `${Math.round(open * 100)} percent open`}
-          onChange={(event) => onOpen(Number(event.target.value) / 100)}
+          onChange={(event) => onOpen(clampLidOpen(Number(event.target.value) / 100))}
           className="mt-2 h-11 w-full cursor-pointer accent-[#e2c275]"
         />
         <div className="flex justify-between text-[10px] uppercase tracking-wide text-gray-500">

@@ -28,9 +28,11 @@ export const LID_OPEN_TRAVEL_MM = 72;
 
 /**
  * The seated lid is not flush with the travel's zero. A tenth of the slide
- * is the closed pose, and the rest of the slider opens it the rest of the way.
+ * is as far back as the lid can sit. Anything further into the box is past
+ * the rail, so the slider, the drag, and the preview all stop here.
  */
 export const LID_CLOSED_FRACTION = 0.1;
+export const LID_SEATED_OFFSET_MM = LID_CLOSED_FRACTION * LID_OPEN_TRAVEL_MM;
 
 export const LID_SIZE = {
   width: 76.67999267578125,
@@ -82,13 +84,30 @@ export function lidLocalToGlb(x: number, y: number, z: number): Vec3 {
   );
 }
 
+/** Slider position. 0 is seated, 1 is fully open. Values outside that stay on the ends. */
+export function clampLidOpen(open: number): number {
+  if (!Number.isFinite(open)) return 0;
+  return Math.min(1, Math.max(0, open));
+}
+
+/**
+ * Millimetres out from the old flush pose, toward the card window (positive
+ * scene Z). The seated offset is the minimum: a negative or undershot value
+ * is pulled back up to the rail.
+ */
+export function clampLidOffset(offsetMm: number): number {
+  if (!Number.isFinite(offsetMm)) return LID_SEATED_OFFSET_MM;
+  return Math.min(LID_OPEN_TRAVEL_MM, Math.max(LID_SEATED_OFFSET_MM, offsetMm));
+}
+
 /**
  * Slide out away from the spine plate (box Y = 0, scene −Z) and toward the
  * opposite end. 0 is the seated closed pose, 1 is fully open. Positive scene Z.
+ * The result is never less than the seated offset.
  */
 export function lidSlideOffset(open: number): number {
-  const t = Math.min(1, Math.max(0, open));
-  return (LID_CLOSED_FRACTION + (1 - LID_CLOSED_FRACTION) * t) * LID_OPEN_TRAVEL_MM;
+  const t = clampLidOpen(open);
+  return clampLidOffset(LID_SEATED_OFFSET_MM + t * (LID_OPEN_TRAVEL_MM - LID_SEATED_OFFSET_MM));
 }
 
 /** Half turn about vertical. The top face stays up and the design stays readable. */
