@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from '@jest/globals';
+import { PNG } from 'pngjs';
 import { meshTopMm } from './colourCore';
 import { readGray16Png } from './heightmapPng';
 import { rasterizeStlHeights, stlBounds } from './printGeometry';
@@ -44,6 +45,41 @@ const FACES = [
     triangles: 2012298,
   },
 ] as const;
+
+function contrastPng(): Uint8Array {
+  const png = new PNG({ width: 8, height: 8 });
+  for (let y = 0; y < 8; y += 1) {
+    for (let x = 0; x < 8; x += 1) {
+      const value = x < 4 ? 0 : 255;
+      const offset = (y * 8 + x) * 4;
+      png.data[offset] = value;
+      png.data[offset + 1] = value;
+      png.data[offset + 2] = value;
+      png.data[offset + 3] = 255;
+    }
+  }
+  return new Uint8Array(PNG.sync.write(png));
+}
+
+describe('depth parameters', () => {
+  it('reads layer height and depths from the description and lets a test override max depth', () => {
+    const text = readFileSync(new URL('../fixtures/left-3.txt', import.meta.url), 'utf8');
+    const parsed = settingsFromPrintDescription(text);
+    expect(parsed.layerHeight).toBe(0.04);
+    expect(parsed.baseLayerHeight).toBe(0.09);
+    expect(parsed.minDepth).toBe(0.25);
+    expect(parsed.maxDepth).toBe(2);
+    const image = contrastPng();
+    const atTwo = renderFaceMesh(image, parsed);
+    const atTwoOhOne = renderFaceMesh(image, { ...parsed, maxDepth: 2.01 });
+    expect(atTwo.actualDepthMm).toBeCloseTo(1.97, 5);
+    expect(atTwoOhOne.actualDepthMm).toBeCloseTo(2.05, 5);
+    expect(stlBounds(atTwo.stl).max[2]).toBeCloseTo(1.97, 2);
+    expect(stlBounds(atTwoOhOne.stl).max[2]).toBeCloseTo(2.05, 2);
+    expect(meshTopMm(parsed)).toBeCloseTo(1.97, 5);
+    expect(meshTopMm({ ...parsed, maxDepth: 2.01 })).toBeCloseTo(2.05, 5);
+  });
+});
 
 describe('STL from a print settings description', () => {
   it.each(FACES)('$name matches the plate size, depth, and swap stack', (face) => {

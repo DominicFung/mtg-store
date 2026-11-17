@@ -16,6 +16,8 @@ test('the seeded 0.2 mm profile is the default 50-layer launch profile', () => {
   const seed = JSON.parse(readFileSync(new URL('../../seeds/nozzleProfiles.json', import.meta.url), 'utf8')) as Array<Record<string, unknown>>;
   assert.equal(seed.length, LAUNCH_PROFILES.length);
   assert.equal(seed[0].layerHeight, LAUNCH_PROFILES[0].layerHeight);
+  assert.equal(seed[0].maxDepth, 2);
+  assert.equal(LAUNCH_PROFILES[0].maxDepth, 2);
   assert.equal(seed[1].detailSize, 0.2);
   assert.equal(seed[1].brightnessAdjust, -0.14);
   assert.equal(seed[0].borderWidth, 0);

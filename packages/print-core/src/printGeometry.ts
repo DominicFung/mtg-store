@@ -47,7 +47,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   height: 105.45,
   nozzleSize: 0.2,
   minDepth: 0.25,
-  maxDepth: 2.01,
+  maxDepth: 2,
   borderWidth: 0,
   borderDepth: 0,
   detailSize: 0.1,

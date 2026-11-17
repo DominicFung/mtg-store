@@ -80,6 +80,11 @@ const SHOTS: Record<string, { position: [number, number, number]; target: [numbe
   back: { position: [0, 36, -140], target: [0, 6, -8] },
   top: { position: [0, 170, 0], target: [0, 0, 4], up: [0, 0, -1] },
   open: { position: [42, 78, 160], target: [0, 6, 16] },
+  // Grazing views so the face relief reads as height, not a flat picture.
+  'graze-right': { position: [-58, 8, 72], target: [-30, -6, -8] },
+  'graze-back': { position: [64, 10, -58], target: [0, -6, -40] },
+  'graze-left': { position: [58, 8, 72], target: [28, -6, -8] },
+  box: { position: [78, 46, 96], target: [0, 2, -6] },
 };
 
 function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMaterial) {
@@ -246,7 +251,7 @@ function ReliefPlate({ buffers, texture, plate }: { buffers: ReliefBuffers; text
   return (
     <mesh geometry={geometry}>
       {texture ? (
-        <meshStandardMaterial map={texture} color="#ffffff" roughness={0.58} metalness={0.03} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={texture} color="#ffffff" roughness={0.78} metalness={0} side={THREE.DoubleSide} />
       ) : (
         <meshStandardMaterial color="#c8c8c8" roughness={0.58} metalness={0.03} side={THREE.DoubleSide} />
       )}
@@ -427,16 +432,10 @@ export default function SpinningBoxWithTextures({
         gl={{ preserveDrawingBuffer: true }}
       >
         <color attach="background" args={['#1f2937']} />
-        <ambientLight intensity={1.15} />
-        <directionalLight
-          intensity={1.2}
-          position={[5, 12, 4]}
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-        />
-        <pointLight intensity={0.55} position={[-8, 6, -6]} />
-        <pointLight intensity={0.35} position={[0, 14, 0]} />
+        <ambientLight intensity={0.22} />
+        <directionalLight intensity={2.6} position={[18, 8, 110]} />
+        <directionalLight intensity={1.7} position={[-80, 6, -18]} />
+        <directionalLight intensity={0.7} position={[12, 36, 20]} />
         <Suspense fallback={null}>
           <TexturedBox
             textures={textures}

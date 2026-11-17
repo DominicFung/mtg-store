@@ -246,8 +246,8 @@ export function transmission(thicknessMm: number, tdMm: number, density = TRANSM
   return 0.05 ** ((thicknessMm / tdMm) * density);
 }
 
-export function blendOver(under: Rgb, over: Rgb, thicknessMm: number, tdMm: number): Rgb {
-  const pass = transmission(thicknessMm, tdMm);
+export function blendOver(under: Rgb, over: Rgb, thicknessMm: number, tdMm: number, density = TRANSMISSION_DENSITY): Rgb {
+  const pass = transmission(thicknessMm, tdMm, density);
   const cover = 1 - pass;
   return [
     under[0] * pass + over[0] * cover,
@@ -265,7 +265,7 @@ function clampByte(value: number): number {
  * The bottom filament is an opaque backing. Each filament above it covers
  * the stack across the layers of that stop which are actually present.
  */
-export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings: LayerSettings): Rgb {
+export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings: LayerSettings, density = TRANSMISSION_DENSITY): Rgb {
   if (stops.length === 0) return [128, 128, 128];
   const target = Math.max(1, layer);
   let color: Rgb = [stops[0].rgb[0], stops[0].rgb[1], stops[0].rgb[2]];
@@ -276,7 +276,7 @@ export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings
     const to = Math.min(stop.endLayer, target);
     if (index > 0 && to >= from) {
       const thicknessMm = (layerTopUm(to, settings) - layerTopUm(from - 1, settings)) / UM;
-      color = blendOver(color, stop.rgb, thicknessMm, stop.filament.td);
+      color = blendOver(color, stop.rgb, thicknessMm, stop.filament.td, density);
     }
     if (target <= stop.endLayer) break;
     previousEnd = stop.endLayer;
@@ -284,10 +284,10 @@ export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings
   return [clampByte(color[0]), clampByte(color[1]), clampByte(color[2])];
 }
 
-export function layerPalette(stops: readonly CoreStop[], settings: LayerSettings, layerCount: number): Rgb[] {
+export function layerPalette(stops: readonly CoreStop[], settings: LayerSettings, layerCount: number, density = TRANSMISSION_DENSITY): Rgb[] {
   const colors: Rgb[] = [];
   for (let layer = 1; layer <= layerCount; layer += 1) {
-    colors.push(colorAtLayer(layer, stops, settings));
+    colors.push(colorAtLayer(layer, stops, settings, density));
   }
   return colors;
 }
@@ -550,6 +550,8 @@ export type RenderInput = {
   smoothing?: number;
   /** Bake a simple front light so the relief reads the way colour-core's lit preview does. */
   shade?: boolean;
+  /** Transmission curve. Omitted uses the calibrated default. */
+  density?: number;
 };
 
 export function renderBlendedRgba(input: RenderInput): Uint8ClampedArray {
@@ -565,7 +567,7 @@ export function renderBlendedRgba(input: RenderInput): Uint8ClampedArray {
   const colorLayers = Math.max(1, Math.min(layerCount, stops.length ? stops[stops.length - 1].endLayer : layerCount));
   const minLayer = Math.min(minBlendLayer(settings), colorLayers);
   const actualDepth = meshTopMm(settings);
-  const palette = layerPalette(stops, settings, colorLayers);
+  const palette = layerPalette(stops, settings, colorLayers, input.density ?? TRANSMISSION_DENSITY);
   const output = new Uint8ClampedArray(width * height * 4);
   const pixelMmX = input.modelWidthMm / Math.max(1, width);
   const pixelMmY = input.modelHeightMm / Math.max(1, height);
