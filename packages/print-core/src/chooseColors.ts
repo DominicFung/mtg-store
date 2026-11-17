@@ -1,4 +1,4 @@
-import { colorCoreLayerCount, evenStops, hexToRgb, standardLuminance, type LayerSettings, type Rgb } from './hueforge';
+import { colorCoreLayerCount, evenStops, hexToRgb, standardLuminance, type LayerSettings, type Rgb } from './colourCore';
 
 export type PaletteFilament = {
   id: string;
@@ -33,7 +33,7 @@ type Peak = {
 };
 
 /**
- * Pick distinct in-stock filaments for a HueForge stack.
+ * Pick distinct in-stock filaments for a colour-core stack.
  *
  * Clusters are weighted in OKLab so a small saturated accent (yellow, orange)
  * keeps its own centre instead of being averaged into the surrounding blue.

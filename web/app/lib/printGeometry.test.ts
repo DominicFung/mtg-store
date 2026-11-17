@@ -23,6 +23,7 @@ import {
   layerForDepth,
   layerForLuminance,
   layerTopMm,
+  meshTopMm,
   moveStop,
   removeStop,
   resolveSmoothPasses,
@@ -31,7 +32,7 @@ import {
   TRANSMISSION_DENSITY,
   type CoreStop,
   type LayerSettings,
-} from './hueforge';
+} from './colourCore';
 import { LAUNCH_PROFILES, profileToSettings, resolveProfile } from './printGeometry';
 import * as sharedMesh from '../../../packages/print-core/src/printGeometry';
 
@@ -199,7 +200,7 @@ test('crop aspect at the shared face height reproduces both ground-truth plates'
   assert.equal(back.heightMm, 105.45);
 });
 
-test('fire-case details.txt matches HueForge byte for byte', () => {
+test('fire-case details.txt matches colour-core byte for byte', () => {
   const text = formatDetails({
     projectName: 'fire-case-3-right.hfp',
     widthMm: 94.67,
@@ -210,7 +211,7 @@ test('fire-case details.txt matches HueForge byte for byte', () => {
   assert.equal(text, FIRE_DETAILS);
 });
 
-test('brigid-case details.txt matches HueForge byte for byte, including the mixed-type warning', () => {
+test('brigid-case details.txt matches colour-core byte for byte, including the mixed-type warning', () => {
   const text = formatDetails({
     projectName: 'brigid-case-2-back.hfp',
     widthMm: 82.44,
@@ -286,6 +287,13 @@ test('a bright pixel is a taller layer than a dark pixel, and both sit on a laye
   assert.ok(tops.some((top) => Math.abs(top - mid) < 1e-9));
 });
 
+test('max depth 2 mm on a 0.04 mm layer stops the mesh at 1.97', () => {
+  const fine = { layerHeight: 0.04, baseLayerHeight: 0.09, minDepth: 0.25, maxDepth: 2 };
+  nearly(meshTopMm(fine), 1.97, 1e-6);
+  nearly(meshTopMm({ ...fine, maxDepth: 2.01 }), 2.05, 1e-6);
+  nearly(meshTopMm({ layerHeight: 0.08, baseLayerHeight: 0.16, minDepth: 0.24, maxDepth: 2 }), 2.08, 1e-6);
+});
+
 test('stops can be inserted, dragged, and removed without leaving the core', () => {
   const start = evenStops(3, 50);
   assert.deepEqual(start, [17, 33, 50]);
@@ -299,7 +307,7 @@ test('stops can be inserted, dragged, and removed without leaving the core', () 
   assert.equal(removed.length, moved.length - 1);
 });
 
-test('the STL matches HueForge structure: centred plate, flat back, lip on the positive edges', () => {
+test('the STL matches colour-core structure: centred plate, flat back, lip on the positive edges', () => {
   const cols = 4;
   const rows = 4;
   const unit = new Float32Array([
@@ -339,7 +347,7 @@ test('the STL matches HueForge structure: centred plate, flat back, lip on the p
   assert.equal(back.length, 2 * (cols + rows));
 });
 
-test('detail size rounds the plate onto the 0.10 mm lattice HueForge exports', () => {
+test('detail size rounds the plate onto the 0.10 mm lattice colour-core exports', () => {
   const fine = meshGrid(94.67, 105.45, 0.1, 50_000_000);
   assert.equal(fine.cols, 947);
   assert.equal(fine.rows, 1055);
@@ -393,7 +401,7 @@ test('a real-sized face mesh is centred, flat on the back, and stops at actual d
   nearly(bounds.min[0], -plate.widthMm / 2, 0.02);
   nearly(bounds.max[0], plate.widthMm / 2, 0.02);
   nearly(bounds.min[2], 0, 1e-4);
-  nearly(bounds.max[2], 2.05, 0.05);
+  nearly(bounds.max[2], 1.97, 0.05);
   assert.equal(decoded.length, mesh.triangles);
   assert.ok(mesh.triangles <= 8_000);
 });

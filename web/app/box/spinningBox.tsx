@@ -6,6 +6,7 @@ import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { decodeBinaryStl, type Triangle } from '../../../packages/print-core/src/printGeometry';
 import { buildLidTextMesh, LID_FONT_FILE, LID_SIZE, lidLocalToGlb, lidSlideOffset, splitLid } from '../../../packages/print-core/src/lidGeometry';
+import type { ReliefBuffers } from '../lib/reliefClient';
 
 interface Props {
   textures: [string, string, string];
@@ -18,7 +19,51 @@ interface Props {
   lidOpen: number;
   /** Posed camera for the orientation check. Omitted in the shop. */
   shot?: string | null;
+  /** Colour-core surface for the right face, the spine, and the left face. */
+  relief?: Array<ReliefBuffers | null>;
 }
+
+type PlateFrame = {
+  center: [number, number, number];
+  /** Image left-to-right, image bottom-to-top, and outward, in the model. */
+  axisX: [number, number, number];
+  axisY: [number, number, number];
+  axisZ: [number, number, number];
+  widthMm: number;
+  heightMm: number;
+};
+
+/**
+ * Art panels on edh_box_v1, measured from the face vertices that carry the
+ * outward normal. Image directions follow the UVs already used for the flat
+ * preview: u = 0 is the left of the crop, v = 0 is the bottom.
+ */
+const RELIEF_PLATES: PlateFrame[] = [
+  {
+    center: [-42.7, -8.075, -10.892],
+    axisX: [0, 0, 1],
+    axisY: [0, 1, 0],
+    axisZ: [-1, 0, 0],
+    widthMm: 94.48,
+    heightMm: 105.41,
+  },
+  {
+    center: [-1.427, -8.288, -59.097],
+    axisX: [-1, 0, 0],
+    axisY: [0, 1, 0],
+    axisZ: [0, 0, -1],
+    widthMm: 82.548,
+    heightMm: 105.41,
+  },
+  {
+    center: [40.353, -8.436, -11.582],
+    axisX: [0, 0, -1],
+    axisY: [0, 1, 0],
+    axisZ: [1, 0, 0],
+    widthMm: 94.48,
+    heightMm: 105.41,
+  },
+];
 
 const FACE_TEXTURE_INDEX: Record<string, number> = {
   Face3: 2, // left side of the box, third crop
@@ -35,6 +80,11 @@ const SHOTS: Record<string, { position: [number, number, number]; target: [numbe
   back: { position: [0, 36, -140], target: [0, 6, -8] },
   top: { position: [0, 170, 0], target: [0, 0, 4], up: [0, 0, -1] },
   open: { position: [42, 78, 160], target: [0, 6, 16] },
+  // Grazing views so the face relief reads as height, not a flat picture.
+  'graze-right': { position: [-58, 8, 72], target: [-30, -6, -8] },
+  'graze-back': { position: [64, 10, -58], target: [0, -6, -40] },
+  'graze-left': { position: [58, 8, 72], target: [28, -6, -8] },
+  box: { position: [78, 46, 96], target: [0, 2, -6] },
 };
 
 function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMaterial) {
@@ -172,7 +222,44 @@ function LidMeshes({
   );
 }
 
-function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidName, lidOpen, shot }: Props) {
+function ReliefPlate({ buffers, texture, plate }: { buffers: ReliefBuffers; texture: THREE.Texture | null; plate: PlateFrame }) {
+  const geometry = React.useMemo(() => {
+    const next = new THREE.BufferGeometry();
+    // Copy first. The placement mutates the attribute, and a remount would
+    // otherwise transform the same samples a second time.
+    next.setAttribute('position', new THREE.BufferAttribute(buffers.positions.slice(), 3));
+    next.setAttribute('uv', new THREE.BufferAttribute(buffers.uvs.slice(), 2));
+    next.setIndex(new THREE.BufferAttribute(buffers.index.slice(), 1));
+    const width = buffers.widthMm || plate.widthMm;
+    const height = buffers.heightMm || plate.heightMm;
+    next.translate(0, 0, 0.6);
+    next.scale(plate.widthMm / width, plate.heightMm / height, 1);
+    next.applyMatrix4(new THREE.Matrix4().makeBasis(
+      new THREE.Vector3(...plate.axisX),
+      new THREE.Vector3(...plate.axisY),
+      new THREE.Vector3(...plate.axisZ),
+    ));
+    next.translate(plate.center[0], plate.center[1], plate.center[2]);
+    next.computeVertexNormals();
+    return next;
+  }, [buffers, plate]);
+
+  React.useEffect(() => () => {
+    geometry.dispose();
+  }, [geometry]);
+
+  return (
+    <mesh geometry={geometry}>
+      {texture ? (
+        <meshStandardMaterial map={texture} color="#ffffff" roughness={0.78} metalness={0} side={THREE.DoubleSide} />
+      ) : (
+        <meshStandardMaterial color="#c8c8c8" roughness={0.58} metalness={0.03} side={THREE.DoubleSide} />
+      )}
+    </mesh>
+  );
+}
+
+function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidName, lidOpen, shot, relief }: Props) {
   const modelRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF(glbPath);
   const [autoRotate, setAutoRotate] = useState(!shot);
@@ -234,6 +321,11 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
       if (!mesh.isMesh) return;
 
       const textureIndex = FACE_TEXTURE_INDEX[mesh.name];
+      if (textureIndex !== undefined && relief?.[textureIndex]) {
+        mesh.visible = false;
+        return;
+      }
+      mesh.visible = true;
       if (textureIndex === undefined) {
         if (mesh.name === 'edh_box') {
           applyOwnedMaterial(mesh, new THREE.MeshStandardMaterial({
@@ -259,7 +351,7 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
     previous.forEach((texture) => {
       if (texture && !maps.includes(texture)) texture.dispose();
     });
-  }, [scene, maps, boxColor]);
+  }, [scene, maps, boxColor, relief]);
 
   useFrame((_, delta) => {
     if (autoRotate && !shot && modelRef.current) {
@@ -270,6 +362,16 @@ function TexturedBox({ textures, glbPath, boxColor, logoColor, textColor, lidNam
   return (
     <group ref={modelRef} onPointerDown={() => setAutoRotate(false)} scale={0.7}>
       <primitive object={scene} />
+      {relief?.map((buffers, index) => (
+        buffers ? (
+          <ReliefPlate
+            key={`relief-${index}-${buffers.positions.byteLength}`}
+            buffers={buffers}
+            texture={maps[index] ?? null}
+            plate={RELIEF_PLATES[index]}
+          />
+        ) : null
+      ))}
       <LidMeshes
         boxColor={boxColor}
         logoColor={logoColor}
@@ -298,6 +400,14 @@ function ShotCamera({ shot }: { shot: string }) {
       controls.update();
     }
   }, [camera, controls, shot]);
+  useFrame(() => {
+    const spec = SHOTS[shot];
+    if (!spec) return;
+    camera.up.set(...(spec.up ?? [0, 1, 0]));
+    camera.position.set(...spec.position);
+    camera.lookAt(...spec.target);
+    if (controls?.target) controls.target.set(...spec.target);
+  });
   return null;
 }
 
@@ -310,6 +420,7 @@ export default function SpinningBoxWithTextures({
   lidName,
   lidOpen,
   shot,
+  relief,
 }: Props) {
   return (
     <div className="relative mx-auto aspect-square w-full min-w-0 max-w-[640px]">
@@ -321,16 +432,10 @@ export default function SpinningBoxWithTextures({
         gl={{ preserveDrawingBuffer: true }}
       >
         <color attach="background" args={['#1f2937']} />
-        <ambientLight intensity={1.15} />
-        <directionalLight
-          intensity={1.2}
-          position={[5, 12, 4]}
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-        />
-        <pointLight intensity={0.55} position={[-8, 6, -6]} />
-        <pointLight intensity={0.35} position={[0, 14, 0]} />
+        <ambientLight intensity={0.22} />
+        <directionalLight intensity={2.6} position={[18, 8, 110]} />
+        <directionalLight intensity={1.7} position={[-80, 6, -18]} />
+        <directionalLight intensity={0.7} position={[12, 36, 20]} />
         <Suspense fallback={null}>
           <TexturedBox
             textures={textures}
@@ -341,10 +446,11 @@ export default function SpinningBoxWithTextures({
             lidName={lidName}
             lidOpen={lidOpen}
             shot={shot}
+            relief={relief}
           />
         </Suspense>
         {shot && <ShotCamera shot={shot} />}
-        <OrbitControls target={[0, 6, -8]} enablePan={false} minDistance={42} maxDistance={320} />
+        <OrbitControls enabled={!shot} target={[0, 6, -8]} enablePan={false} minDistance={42} maxDistance={320} />
       </Canvas>
     </div>
   );

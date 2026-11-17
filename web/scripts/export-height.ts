@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { colorCoreLayerCount, layerTopMm } from '../app/lib/hueforge';
+import { colorCoreLayerCount, layerTopMm } from '../app/lib/colourCore';
 import { buildFaceMesh, DEFAULT_PRINT_SETTINGS, meshGrid, modelSizeForCrop } from '../app/lib/printGeometry';
 
 function arg(name: string): string {
@@ -28,7 +28,7 @@ const mesh = buildFaceMesh({
   }],
   smoothing: 1,
   maxTriangles: 50_000_000,
-  header: 'HueForge',
+  header: 'colour-core',
 });
 writeFileSync(`${out}.stl`, mesh.stl);
 const meta = {

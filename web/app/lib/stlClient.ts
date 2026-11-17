@@ -1,4 +1,4 @@
-import type { CoreStop } from './hueforge';
+import type { CoreStop } from './colourCore';
 import { buildFaceMesh, type FaceMesh, type PrintSettings } from './printGeometry';
 
 type MeshRequest = {

@@ -65,7 +65,7 @@ export class DynamoStack extends Stack {
       exportName: `${props.name}-UserTable-Arn`
     })
 
-    // Catalogue of filaments sold for the HueForge-style deck box.
+    // Catalogue of filaments sold for the layered-filament deck box.
     // Retained on stack delete, same as the card table.
     const filamentTable = new Table(this, 'FilamentTable', {
       partitionKey: { name: 'filamentId', type: AttributeType.STRING },
@@ -83,7 +83,7 @@ export class DynamoStack extends Stack {
       exportName: `${props.name}-FilamentTable-Arn`
     })
 
-    // HueForge print defaults for the deck box. One row, settingsId = "default".
+    // colour-core print defaults for the deck box. One row, settingsId = "default".
     // Retained on stack delete, same as the filament table.
     const printSettingsTable = new Table(this, 'PrintSettingsTable', {
       partitionKey: { name: 'settingsId', type: AttributeType.STRING },

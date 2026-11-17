@@ -1,5 +1,5 @@
 import { buildFaceMesh, type FaceMesh, type PrintSettings } from './printGeometry';
-import type { CoreStop } from './hueforge';
+import type { CoreStop } from './colourCore';
 
 type Request = {
   id: number;

@@ -20,6 +20,8 @@ export {
   layerPalette,
   layerTopMm,
   layerTopUm,
+  meshTopMm,
+  depthLimitedLayer,
   luminanceFromRgba,
   maxChannelLuminance,
   minBlendLayer,
@@ -38,10 +40,11 @@ export {
   type LayerSettings,
   type RenderInput,
   type Rgb,
-} from './hueforge';
+} from './colourCore';
 
 export {
   buildFaceMesh,
+  buildReliefSurface,
   buildVertexHeights,
   clampToMaxWidth,
   decodeBinaryStl,
@@ -55,8 +58,11 @@ export {
   MAX_MESH_TRIANGLES,
   meshGrid,
   meshTriangleCount,
+  reliefStride,
   modelSizeForCrop,
   PRINT_SETTINGS_ID,
+  rasterizeStlHeights,
+  stlBounds,
   roundMm,
   triangleBounds,
   triangleBoundsFromStl,
@@ -68,6 +74,18 @@ export {
   type Triangle,
   type Vec3,
 } from './printGeometry';
+
+export {
+  DESCRIPTION_FILAMENTS,
+  parsePrintDescription,
+  settingsFromPrintDescription,
+  type FaceStlSettings,
+  type ParsedFilament,
+  type ParsedSwap,
+  type PrintDescription,
+} from './printDescription';
+
+export { renderFaceMesh, renderFaceStl, renderFaceStlFromDescription } from './renderFaceStl';
 
 export { isOrderNumber, newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from './orderNumber';
 

@@ -1,7 +1,7 @@
 export type Rgb = [number, number, number];
 
 /**
- * HueForge's published definition: TD is the thickness that blocks about 95%
+ * colour-core's published definition: TD is the thickness that blocks about 95%
  * of the light, so transmission at one TD is 0.05.
  *
  * The colour core in brigid-case-2-back is much more opaque than that curve.
@@ -11,7 +11,7 @@ export type Rgb = [number, number, number];
  */
 export const TRANSMISSION_DENSITY = 10;
 
-/** HueForge "Smoothing 4": blur radius in detail-size samples. */
+/** colour-core "Smoothing 4": blur radius in detail-size samples. */
 export const DEFAULT_SMOOTHING = 4;
 
 /** Combo slider at 1 is standard luminance. 0 is max-channel. */
@@ -26,10 +26,10 @@ export type LayerSettings = {
   maxDepth: number;
   /**
    * Added to stretched luminance and clamped to 0..1 before the depth map.
-   * HueForge's Brightness Adjust. 0 leaves the stretch alone.
+   * colour-core's Brightness Adjust. 0 leaves the stretch alone.
    */
   brightnessAdjust?: number;
-  /** HueForge smoothing slider. See resolveSmoothPasses. */
+  /** colour-core smoothing slider. See resolveSmoothPasses. */
   smoothing?: number;
 };
 
@@ -69,7 +69,7 @@ export function hexToRgb(hex: string): Rgb {
 
 /**
  * BT.601 luminance of sRGB bytes, 0..1. This is the lithophane "standard"
- * brightness: it matches both HueForge STLs; Rec. 709 does not.
+ * brightness: it matches both colour-core STLs; Rec. 709 does not.
  */
 export function standardLuminance(red: number, green: number, blue: number): number {
   return (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
@@ -81,7 +81,7 @@ export function maxChannelLuminance(red: number, green: number, blue: number): n
 
 /**
  * Combo luminance. Weight 1 is standard (brighter = taller). Weight 0 is the
- * max RGB channel. HueForge's default combo slider is standard.
+ * max RGB channel. colour-core's default combo slider is standard.
  */
 export function comboLuminance(red: number, green: number, blue: number, weight = DEFAULT_COMBO_WEIGHT): number {
   const mix = clamp01(weight);
@@ -111,6 +111,28 @@ export function colorCoreLayerCount(settings: LayerSettings): number {
   if (step <= 0) return 1;
   const steps = Math.round((mmToUm(settings.maxDepth) - mmToUm(settings.baseLayerHeight)) / step);
   return Math.max(1, steps + 2);
+}
+
+/** 1-based layer with the highest top that is still within max depth. */
+export function depthLimitedLayer(settings: LayerSettings): number {
+  const step = mmToUm(settings.layerHeight);
+  if (step <= 0) return 1;
+  const steps = Math.floor((mmToUm(settings.maxDepth) - mmToUm(settings.baseLayerHeight)) / step);
+  return Math.max(1, steps + 1);
+}
+
+/**
+ * White point of the relief mesh.
+ * When max depth lands on a layer top, the calibrated core keeps the extra
+ * layer above it (2.01 mm → 2.05, and the 0.08 mm plates stay at 2.08).
+ * When max depth falls between layer tops, the mesh stops on the last layer
+ * that does not pass it. Max depth 2 mm with a 0.09 mm base and a 0.04 mm
+ * step is layer 48, 1.97 mm.
+ */
+export function meshTopMm(settings: LayerSettings): number {
+  const limited = layerTopMm(depthLimitedLayer(settings), settings);
+  if (mmToUm(limited) + 1 < mmToUm(settings.maxDepth)) return limited;
+  return layerTopMm(colorCoreLayerCount(settings), settings);
 }
 
 /** 1-based layer whose top is nearest to this depth. */
@@ -151,7 +173,7 @@ export function stretchToUnit(luma: ArrayLike<number>): Float32Array {
 }
 
 /**
- * HueForge Brightness Adjust, applied after the black-to-white stretch.
+ * colour-core Brightness Adjust, applied after the black-to-white stretch.
  * A negative value pulls the white point down and leaves crushed blacks at 0,
  * so the mesh still starts at Min Depth. The Eldrazi 0.4 mm plate uses -0.14.
  */
@@ -224,8 +246,8 @@ export function transmission(thicknessMm: number, tdMm: number, density = TRANSM
   return 0.05 ** ((thicknessMm / tdMm) * density);
 }
 
-export function blendOver(under: Rgb, over: Rgb, thicknessMm: number, tdMm: number): Rgb {
-  const pass = transmission(thicknessMm, tdMm);
+export function blendOver(under: Rgb, over: Rgb, thicknessMm: number, tdMm: number, density = TRANSMISSION_DENSITY): Rgb {
+  const pass = transmission(thicknessMm, tdMm, density);
   const cover = 1 - pass;
   return [
     under[0] * pass + over[0] * cover,
@@ -243,7 +265,7 @@ function clampByte(value: number): number {
  * The bottom filament is an opaque backing. Each filament above it covers
  * the stack across the layers of that stop which are actually present.
  */
-export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings: LayerSettings): Rgb {
+export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings: LayerSettings, density = TRANSMISSION_DENSITY): Rgb {
   if (stops.length === 0) return [128, 128, 128];
   const target = Math.max(1, layer);
   let color: Rgb = [stops[0].rgb[0], stops[0].rgb[1], stops[0].rgb[2]];
@@ -254,7 +276,7 @@ export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings
     const to = Math.min(stop.endLayer, target);
     if (index > 0 && to >= from) {
       const thicknessMm = (layerTopUm(to, settings) - layerTopUm(from - 1, settings)) / UM;
-      color = blendOver(color, stop.rgb, thicknessMm, stop.filament.td);
+      color = blendOver(color, stop.rgb, thicknessMm, stop.filament.td, density);
     }
     if (target <= stop.endLayer) break;
     previousEnd = stop.endLayer;
@@ -262,10 +284,10 @@ export function colorAtLayer(layer: number, stops: readonly CoreStop[], settings
   return [clampByte(color[0]), clampByte(color[1]), clampByte(color[2])];
 }
 
-export function layerPalette(stops: readonly CoreStop[], settings: LayerSettings, layerCount: number): Rgb[] {
+export function layerPalette(stops: readonly CoreStop[], settings: LayerSettings, layerCount: number, density = TRANSMISSION_DENSITY): Rgb[] {
   const colors: Rgb[] = [];
   for (let layer = 1; layer <= layerCount; layer += 1) {
-    colors.push(colorAtLayer(layer, stops, settings));
+    colors.push(colorAtLayer(layer, stops, settings, density));
   }
   return colors;
 }
@@ -326,7 +348,7 @@ function mixedFilamentTypes(stops: readonly CoreStop[]): boolean {
 }
 
 /**
- * HueForge describe text. Project name is the only caller-chosen token.
+ * colour-core describe text. Project name is the only caller-chosen token.
  * Max Depth and Actual Depth are whole millimetres. Swap depths keep two
  * decimals. Transmission distances drop trailing zeros.
  */
@@ -526,8 +548,10 @@ export type RenderInput = {
   stops: readonly CoreStop[];
   settings: LayerSettings & { detailSize?: number };
   smoothing?: number;
-  /** Bake a simple front light so the relief reads the way HueForge's lit preview does. */
+  /** Bake a simple front light so the relief reads the way colour-core's lit preview does. */
   shade?: boolean;
+  /** Transmission curve. Omitted uses the calibrated default. */
+  density?: number;
 };
 
 export function renderBlendedRgba(input: RenderInput): Uint8ClampedArray {
@@ -542,8 +566,8 @@ export function renderBlendedRgba(input: RenderInput): Uint8ClampedArray {
   const layerCount = colorCoreLayerCount(settings);
   const colorLayers = Math.max(1, Math.min(layerCount, stops.length ? stops[stops.length - 1].endLayer : layerCount));
   const minLayer = Math.min(minBlendLayer(settings), colorLayers);
-  const actualDepth = layerTopMm(layerCount, settings);
-  const palette = layerPalette(stops, settings, colorLayers);
+  const actualDepth = meshTopMm(settings);
+  const palette = layerPalette(stops, settings, colorLayers, input.density ?? TRANSMISSION_DENSITY);
   const output = new Uint8ClampedArray(width * height * 4);
   const pixelMmX = input.modelWidthMm / Math.max(1, width);
   const pixelMmY = input.modelHeightMm / Math.max(1, height);

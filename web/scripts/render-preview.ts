@@ -10,7 +10,7 @@ import {
   smoothLuminance,
   smoothingRadiusPx,
   type CoreStop,
-} from '../app/lib/hueforge';
+} from '../app/lib/colourCore';
 import {
   buildFaceMesh,
   meshGrid,
