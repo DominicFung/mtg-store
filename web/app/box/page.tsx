@@ -29,7 +29,10 @@ import { renderLayeredCrops } from '../lib/renderLayers';
 import { listActiveProfiles, outpaintArt } from '../lib/shopOrders';
 import { usePrintSettings } from '../lib/usePrintSettings';
 import {
+  EXAMPLE_BOX_FILAMENT_ID,
+  EXAMPLE_LOGO_FILAMENT_ID,
   EXAMPLE_STITCHED,
+  EXAMPLE_TEXT_FILAMENT_ID,
   exampleEndLayers,
   exampleLayers,
   loadExampleCrops,
@@ -73,6 +76,9 @@ export default function Home() {
   const [exampleOn, setExampleOn] = useState(false);
   const [exampleBusy, setExampleBusy] = useState(false);
   const exampleHoldRef = useRef(false);
+  const exampleOnRef = useRef(false);
+  const selectExampleRef = useRef<() => void>(() => undefined);
+  exampleOnRef.current = exampleOn;
   const { filaments, source } = useFilaments();
   const shopFilaments = useMemo(() => withDeeplee(filaments), [filaments]);
   const { settings: fallbackSettings } = usePrintSettings();
@@ -86,6 +92,11 @@ export default function Home() {
   const layerCount = profile?.layerCount ?? colorCoreLayerCount(settings);
 
   const clearExample = () => {
+    if (exampleOn) {
+      setBoxFilamentId(DEFAULT_BOX_FILAMENT_ID);
+      setLogoFilamentId(DEFAULT_LOGO_FILAMENT_ID);
+      setTextFilamentId(DEFAULT_TEXT_FILAMENT_ID);
+    }
     exampleHoldRef.current = false;
     setExampleOn(false);
   };
@@ -95,6 +106,11 @@ export default function Home() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
+      if (exampleOnRef.current) {
+        setBoxFilamentId(DEFAULT_BOX_FILAMENT_ID);
+        setLogoFilamentId(DEFAULT_LOGO_FILAMENT_ID);
+        setTextFilamentId(DEFAULT_TEXT_FILAMENT_ID);
+      }
       exampleHoldRef.current = false;
       setExampleOn(false);
       setColoursTouched(false);
@@ -139,6 +155,8 @@ export default function Home() {
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
+    const useExample = query.get('example') === '1';
+    if (useExample) selectExampleRef.current();
     const nextShot = query.get('shot');
     if (!nextShot) return;
     setShot(nextShot);
@@ -147,6 +165,7 @@ export default function Home() {
     setLidName(query.get('name') || 'Dom Fungus');
     const open = query.get('open');
     setLidOpen(nextShot === 'open' ? 0.72 : open ? Number(open) : 0);
+    if (useExample) return;
     const paint = (label: string, fill: string, width: number) => {
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -171,7 +190,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (shot) return;
+    if (shot && !exampleOn) return;
     if (!crops[0] || layers.length === 0) {
       setLayered((current) => (current[0] ? ['', '', ''] as [string, string, string] : current));
       return;
@@ -190,7 +209,7 @@ export default function Home() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [crops, layers, stops, settings, shot]);
+  }, [crops, layers, stops, settings, shot, exampleOn]);
 
   useEffect(() => {
     if (!crops[0]) {
@@ -365,6 +384,9 @@ export default function Home() {
       setImageToken((current) => current + 1);
       setCropBox(null);
       setColoursTouched(true);
+      setBoxFilamentId(EXAMPLE_BOX_FILAMENT_ID);
+      setLogoFilamentId(EXAMPLE_LOGO_FILAMENT_ID);
+      setTextFilamentId(EXAMPLE_TEXT_FILAMENT_ID);
       setLayers(exampleLayers(shopFilaments));
       setStops(exampleEndLayers(layerCount));
       setCrops(nextCrops);
@@ -377,6 +399,7 @@ export default function Home() {
       setExampleBusy(false);
     }
   };
+  selectExampleRef.current = () => { void selectExample(); };
 
   return (
     <div className="min-h-full overflow-x-clip bg-gradient-to-b from-[#1a1a2e] to-[#16213e] font-serif text-white">

@@ -228,18 +228,21 @@ export default function ColorCore({
             ref={barRef}
             className="relative h-80 w-14 touch-none rounded-md border border-cyan-300/80 md:h-[28rem]"
             onPointerDown={(event) => {
-              if ((event.target as HTMLElement).closest('[data-stop-handle]')) return;
+              const handle = (event.target as HTMLElement).closest('[data-stop-handle]');
+              const handleIndex = handle ? Number(handle.getAttribute('data-stop-index')) : NaN;
               const layer = layerFromClientY(event.clientY);
               if (layer === null || safeStops.length === 0) return;
-              let closest = 0;
-              let distance = Infinity;
-              safeStops.forEach((stop, index) => {
-                const gap = Math.abs(stop - layer);
-                if (gap < distance) {
-                  distance = gap;
-                  closest = index;
-                }
-              });
+              let closest = Number.isInteger(handleIndex) ? handleIndex : 0;
+              if (!Number.isInteger(handleIndex)) {
+                let distance = Infinity;
+                safeStops.forEach((stop, index) => {
+                  const gap = Math.abs(stop - layer);
+                  if (gap < distance) {
+                    distance = gap;
+                    closest = index;
+                  }
+                });
+              }
               dragStop.current = closest;
               event.currentTarget.setPointerCapture(event.pointerId);
               commit(layers, moveStop(safeStops, closest, layer, layerCount));
@@ -269,6 +272,7 @@ export default function ColorCore({
               <div
                 key={`${layers[index]?.id ?? 'stop'}-${index}`}
                 data-stop-handle
+                data-stop-index={index}
                 role="slider"
                 tabIndex={0}
                 aria-label={`${layers[index]?.name ?? 'Filament'} ends at layer ${stop}`}

@@ -3,6 +3,11 @@ import { clampStops, layerTopMm, type LayerSettings } from './colourCore';
 
 export const EXAMPLE_ID = 'winter-dogs';
 
+/** Lid colours applied only when this example is chosen. */
+export const EXAMPLE_BOX_FILAMENT_ID = 'elegoo-matte-pla-sakura-pink';
+export const EXAMPLE_LOGO_FILAMENT_ID = 'deeplee-matte-white';
+export const EXAMPLE_TEXT_FILAMENT_ID = 'deeplee-matte-white';
+
 export const EXAMPLE_STITCHED = '/examples/winter-dogs/stitched.png';
 
 export const EXAMPLE_FACES = [

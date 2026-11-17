@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'r
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { SHELL_FACE_CROP, WRAP_PLATES, type WrapPlate } from '../../../packages/print-core/src/boxWrap';
 import { decodeBinaryStl, type Triangle } from '../../../packages/print-core/src/printGeometry';
 import { buildLidTextMesh, LID_FONT_FILE, LID_SIZE, lidLocalToGlb, lidSlideOffset, splitLid } from '../../../packages/print-core/src/lidGeometry';
 import type { ReliefBuffers } from '../lib/reliefClient';
@@ -23,53 +24,10 @@ interface Props {
   relief?: Array<ReliefBuffers | null>;
 }
 
-type PlateFrame = {
-  center: [number, number, number];
-  /** Image left-to-right, image bottom-to-top, and outward, in the model. */
-  axisX: [number, number, number];
-  axisY: [number, number, number];
-  axisZ: [number, number, number];
-  widthMm: number;
-  heightMm: number;
-};
+type PlateFrame = WrapPlate;
 
-/**
- * Art panels on edh_box_v1, measured from the face vertices that carry the
- * outward normal. Image directions follow the UVs already used for the flat
- * preview: u = 0 is the left of the crop, v = 0 is the bottom.
- */
-const RELIEF_PLATES: PlateFrame[] = [
-  {
-    center: [-42.7, -8.075, -10.892],
-    axisX: [0, 0, 1],
-    axisY: [0, 1, 0],
-    axisZ: [-1, 0, 0],
-    widthMm: 94.48,
-    heightMm: 105.41,
-  },
-  {
-    center: [-1.427, -8.288, -59.097],
-    axisX: [-1, 0, 0],
-    axisY: [0, 1, 0],
-    axisZ: [0, 0, -1],
-    widthMm: 82.548,
-    heightMm: 105.41,
-  },
-  {
-    center: [40.353, -8.436, -11.582],
-    axisX: [0, 0, -1],
-    axisY: [0, 1, 0],
-    axisZ: [1, 0, 0],
-    widthMm: 94.48,
-    heightMm: 105.41,
-  },
-];
-
-const FACE_TEXTURE_INDEX: Record<string, number> = {
-  Face3: 2, // left side of the box, third crop
-  Face2: 1, // spine
-  Face1: 0, // right side of the box, first crop
-};
+const RELIEF_PLATES = WRAP_PLATES;
+const FACE_TEXTURE_INDEX: Record<string, number> = SHELL_FACE_CROP;
 
 const SHOTS: Record<string, { position: [number, number, number]; target: [number, number, number]; up?: [number, number, number] }> = {
   // Same camera the shop uses before anyone drags it.
@@ -85,6 +43,10 @@ const SHOTS: Record<string, { position: [number, number, number]; target: [numbe
   'graze-back': { position: [64, 10, -58], target: [0, -6, -40] },
   'graze-left': { position: [58, 8, 72], target: [28, -6, -8] },
   box: { position: [78, 46, 96], target: [0, 2, -6] },
+  // Corners where the stitched panels meet: right into the spine, then the spine into the left.
+  'seam-right': { position: [120, 36, -130], target: [8, 0, -36] },
+  'seam-left': { position: [-120, 36, -130], target: [-8, 0, -36] },
+  closed: { position: [46, 128, 148], target: [2, 2, 6] },
 };
 
 function applyOwnedMaterial(mesh: THREE.Mesh, material: THREE.MeshStandardMaterial) {
@@ -432,10 +394,11 @@ export default function SpinningBoxWithTextures({
         gl={{ preserveDrawingBuffer: true }}
       >
         <color attach="background" args={['#1f2937']} />
-        <ambientLight intensity={0.22} />
-        <directionalLight intensity={2.6} position={[18, 8, 110]} />
-        <directionalLight intensity={1.7} position={[-80, 6, -18]} />
-        <directionalLight intensity={0.7} position={[12, 36, 20]} />
+        <ambientLight intensity={0.62} />
+        <hemisphereLight color="#fff8f2" groundColor="#243044" intensity={0.4} />
+        <directionalLight intensity={0.85} position={[95, 40, 24]} />
+        <directionalLight intensity={0.85} position={[-95, 40, 24]} />
+        <directionalLight intensity={0.75} position={[8, 30, -120]} />
         <Suspense fallback={null}>
           <TexturedBox
             textures={textures}

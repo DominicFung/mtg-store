@@ -26,6 +26,12 @@ export const EMBOSS_MM = 1.01;
 export const SPARK_SPLIT_Z = 7.5;
 export const LID_OPEN_TRAVEL_MM = 72;
 
+/**
+ * The seated lid is not flush with the travel's zero. A tenth of the slide
+ * is the closed pose, and the rest of the slider opens it the rest of the way.
+ */
+export const LID_CLOSED_FRACTION = 0.1;
+
 export const LID_SIZE = {
   width: 76.67999267578125,
   depth: 88.1259765625,
@@ -78,11 +84,11 @@ export function lidLocalToGlb(x: number, y: number, z: number): Vec3 {
 
 /**
  * Slide out away from the spine plate (box Y = 0, scene −Z) and toward the
- * opposite end. 0 is closed, 1 is open. Positive scene Z.
+ * opposite end. 0 is the seated closed pose, 1 is fully open. Positive scene Z.
  */
 export function lidSlideOffset(open: number): number {
   const t = Math.min(1, Math.max(0, open));
-  return t * LID_OPEN_TRAVEL_MM;
+  return (LID_CLOSED_FRACTION + (1 - LID_CLOSED_FRACTION) * t) * LID_OPEN_TRAVEL_MM;
 }
 
 /** Half turn about vertical. The top face stays up and the design stays readable. */
