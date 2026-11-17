@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { hexToRgb, type CoreStop } from './hueforge';
+import { hexToRgb, type CoreStop } from './colourCore';
 import {
   buildFaceMesh,
   decodeBinaryStl,
@@ -28,7 +28,7 @@ const stops: CoreStop[] = [
   { filament: { type: 'PLA', brand: 'BambuLab Basic', name: 'White', td: 5 }, rgb: hexToRgb('#FFFFFF'), endLayer: 24 },
 ];
 
-test('the Urza 0.4 mm plate matches the HueForge lattice with smoothing 4 and no border', () => {
+test('the Urza 0.4 mm plate matches the colour-core lattice with smoothing 4 and no border', () => {
   assert.equal(meta.width, 293);
   assert.equal(meta.height, 326);
   const mesh = buildFaceMesh({
@@ -37,7 +37,7 @@ test('the Urza 0.4 mm plate matches the HueForge lattice with smoothing 4 and no
     imageHeight: meta.height,
     settings,
     stops,
-    header: 'HueForge',
+    header: 'colour-core',
     maxTriangles: 50_000_000,
   });
   assert.equal(mesh.cols, 473);

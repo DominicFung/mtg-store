@@ -1,6 +1,6 @@
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/hueforge';
+import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/colourCore';
 import { profileToSettings, type NozzleProfile } from '../../../packages/print-core/src/profiles';
 import { FACE_NAMES, type FaceName } from '../../../packages/print-core/src/printGeometry';
 import { generationDecision, orderObjectKeys, readyEmail, failedEmail, PRESIGN_TTL_SECONDS, type LidFinish } from '../orders/logic';

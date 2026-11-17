@@ -1,5 +1,5 @@
 import { Filament } from './filamentCatalogue';
-import { CoreStop, hexToRgb, renderBlendedRgba } from './hueforge';
+import { CoreStop, hexToRgb, renderBlendedRgba } from './colourCore';
 import { modelSizeForCrop, PrintSettings } from './printGeometry';
 
 export function toCoreStops(layers: readonly Filament[], endLayers: readonly number[]): CoreStop[] {

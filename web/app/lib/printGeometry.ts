@@ -1,5 +1,6 @@
 export {
   buildFaceMesh,
+  buildReliefSurface,
   buildVertexHeights,
   clampToMaxWidth,
   decodeBinaryStl,
@@ -13,6 +14,7 @@ export {
   MAX_MESH_TRIANGLES,
   meshGrid,
   meshTriangleCount,
+  reliefStride,
   modelSizeForCrop,
   PRINT_SETTINGS_ID,
   roundMm,
@@ -26,6 +28,7 @@ export type {
   FaceName,
   HeightField,
   PrintSettings,
+  ReliefSurface,
   Triangle,
   Vec3,
 } from '../../../packages/print-core/src/printGeometry';

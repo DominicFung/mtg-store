@@ -1,4 +1,4 @@
-"""Build side-by-side previews against the HueForge screenshots."""
+"""Build side-by-side previews against the colour-core screenshots."""
 
 import json
 import subprocess
@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path('/agent/repos/mtg-store/web')
 ASSETS = Path('/home/ubuntu/.cursor/projects/agent-repos-mtg-store/assets')
 OUT = Path('/opt/cursor/artifacts')
-TMP = Path('/tmp/hueforge-compare')
+TMP = Path('/tmp/colourCore-compare')
 TMP.mkdir(parents=True, exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -18,14 +18,14 @@ CASES = [
         'name': 'fire-case-3-right',
         'preset': 'fire',
         'source': ASSETS / 'source-art.png',
-        'shot': ASSETS / 'hueforge-screenshot.png',
+        'shot': ASSETS / 'colourCore-screenshot.png',
         'plate': '94.67 × 105.45 mm right face',
     },
     {
         'name': 'brigid-case-2-back',
         'preset': 'brigid',
         'source': ASSETS / 'brigid-source-art.png',
-        'shot': ASSETS / 'brigid-hueforge-screenshot.png',
+        'shot': ASSETS / 'brigid-colourCore-screenshot.png',
         'plate': '82.44 × 105.45 mm back face',
     },
 ]
@@ -112,7 +112,7 @@ def main() -> None:
         panels = [
             (fit(flat), 'Our blend (flat)'),
             (fit(shade), 'Our blend (lit)'),
-            (fit(hue), 'HueForge preview'),
+            (fit(hue), 'colour-core preview'),
             (fit(height), 'Height (dark=min)'),
         ]
         gap = 12

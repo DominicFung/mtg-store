@@ -1,4 +1,4 @@
-import { colorCoreLayerCount, layerTopMm } from '../../../packages/print-core/src/hueforge';
+import { colorCoreLayerCount, layerTopMm } from '../../../packages/print-core/src/colourCore';
 import { isBoxFilament } from '../../../packages/print-core/src/boxColours';
 import { normalizeLidText } from '../../../packages/print-core/src/lidText';
 import { isOrderNumber, newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';

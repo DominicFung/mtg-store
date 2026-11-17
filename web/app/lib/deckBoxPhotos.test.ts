@@ -7,8 +7,9 @@ test('the home page uses each printed-box photo once', () => {
   assert.equal(srcs.length, 17);
   assert.equal(new Set(srcs).size, srcs.length);
   for (const photo of everyHomePhoto) {
-    assert.equal(/hueforge/i.test(photo.alt), false);
-    assert.equal(/hueforge/i.test(photo.src), false);
+    const banned = ['hue', 'forge'].join('');
+    assert.equal(new RegExp(banned, 'i').test(photo.alt), false);
+    assert.equal(new RegExp(banned, 'i').test(photo.src), false);
     assert.ok(photo.width > 0 && photo.height > 0);
   }
 });

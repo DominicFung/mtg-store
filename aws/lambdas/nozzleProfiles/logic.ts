@@ -1,4 +1,4 @@
-import { colorCoreLayerCount, layerForDepth, layerTopMm } from '../../../packages/print-core/src/hueforge';
+import { colorCoreLayerCount, layerForDepth, layerTopMm } from '../../../packages/print-core/src/colourCore';
 import { LAUNCH_PROFILES, type NozzleProfile } from '../../../packages/print-core/src/profiles';
 
 const RANGES = {

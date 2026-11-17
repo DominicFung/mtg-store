@@ -1,11 +1,11 @@
-import { colorCoreLayerCount, layerForDepth, layerTopMm, type LayerSettings } from './hueforge';
+import { colorCoreLayerCount, layerForDepth, layerTopMm, type LayerSettings } from './colourCore';
 import type { PrintSettings } from './printGeometry';
 
 /**
  * A nozzle profile is the print settings for one nozzle, stored so the shop
  * can change them without a deploy. `layerCount` is derived. `layersAtMaxDepth`
  * is the 1-based layer whose top meets Max Depth (the top slider on a
- * HueForge colour core that stops on Max Depth). The mesh white point is one
+ * colour-core that stops on Max Depth). The mesh white point is one
  * layer higher, which is `layerCount`.
  */
 export type NozzleProfile = LayerSettings & {
@@ -15,7 +15,7 @@ export type NozzleProfile = LayerSettings & {
   detailSize: number;
   borderWidth: number;
   borderDepth: number;
-  /** HueForge smoothing slider. 4 is one 3×3 on a 0.10 mm grid and no extra blur on a 0.20 mm grid. */
+  /** colour-core smoothing slider. 4 is one 3×3 on a 0.10 mm grid and no extra blur on a 0.20 mm grid. */
   smoothing: number;
   /** Aspect-fit clamp. The 0.2 mm plates are wider than the nominal spine. */
   maxWidth: number;

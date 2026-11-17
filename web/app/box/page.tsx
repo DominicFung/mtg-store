@@ -22,12 +22,20 @@ import {
   Filament,
   MOCK_FILAMENTS,
 } from '../lib/filamentCatalogue';
-import { colorCoreLayerCount, evenStops } from '../lib/hueforge';
+import { colorCoreLayerCount, evenStops } from '../lib/colourCore';
 import { modelSizeForCrop, profileToSettings, resolveProfile, type ResolvedProfile } from '../lib/printGeometry';
 import { LAUNCH_PROFILES } from '../lib/printGeometry';
 import { renderLayeredCrops } from '../lib/renderLayers';
 import { listActiveProfiles, outpaintArt } from '../lib/shopOrders';
 import { usePrintSettings } from '../lib/usePrintSettings';
+import {
+  EXAMPLE_STITCHED,
+  exampleEndLayers,
+  exampleLayers,
+  loadExampleCrops,
+  withDeeplee,
+} from '../lib/exampleDesign';
+import { useReliefMeshes } from '../lib/useReliefMeshes';
 
 const EMPTY_TEXTURES: [string, string, string] = ['', '', ''];
 const STEPS = ['Commander', 'Crop', 'Colours'] as const;
@@ -62,7 +70,11 @@ export default function Home() {
   const [lidName, setLidName] = useState('');
   const [lidOpen, setLidOpen] = useState(0);
   const [shot, setShot] = useState<string | null>(null);
+  const [exampleOn, setExampleOn] = useState(false);
+  const [exampleBusy, setExampleBusy] = useState(false);
+  const exampleHoldRef = useRef(false);
   const { filaments, source } = useFilaments();
+  const shopFilaments = useMemo(() => withDeeplee(filaments), [filaments]);
   const { settings: fallbackSettings } = usePrintSettings();
   const layersRef = useRef(layers);
   layersRef.current = layers;
@@ -73,11 +85,19 @@ export default function Home() {
   );
   const layerCount = profile?.layerCount ?? colorCoreLayerCount(settings);
 
+  const clearExample = () => {
+    exampleHoldRef.current = false;
+    setExampleOn(false);
+  };
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
+      exampleHoldRef.current = false;
+      setExampleOn(false);
+      setColoursTouched(false);
       setImage(reader.result as string);
       setArtUrl(null);
       setSubject(null);
@@ -98,16 +118,20 @@ export default function Home() {
   });
 
   useEffect(() => {
-    const byId = new Map(filaments.map((filament) => [filament.id, filament]));
+    if (exampleHoldRef.current) {
+      setLayers(exampleLayers(shopFilaments));
+      return;
+    }
+    const byId = new Map(shopFilaments.map((filament) => [filament.id, filament]));
     const current = layersRef.current;
     if (current.length >= 2 && current.every((layer) => byId.has(layer.id))) {
       setLayers(current.map((layer) => byId.get(layer.id)!));
       return;
     }
-    const next = defaultLayerSelection(filaments);
+    const next = defaultLayerSelection(shopFilaments);
     setLayers(next);
     setStops(evenStops(next.length, colorCoreLayerCount(fallbackSettings)));
-  }, [filaments, fallbackSettings]);
+  }, [shopFilaments, fallbackSettings]);
 
   useEffect(() => {
     if (step === 3) setPreviewReady(true);
@@ -194,18 +218,27 @@ export default function Home() {
     size ? modelSizeForCrop(size.width, size.height, settings.height) : null
   ));
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
-  const boxChoices = boxFilamentChoices(filaments);
+  const boxChoices = boxFilamentChoices(shopFilaments);
   const boxFilament = boxChoices.find((filament) => filament.id === boxFilamentId) ?? boxChoices[0] ?? null;
-  const logoFilament = filamentById(filaments, logoFilamentId, DEFAULT_LOGO_FILAMENT_ID);
-  const textFilament = filamentById(filaments, textFilamentId, DEFAULT_TEXT_FILAMENT_ID);
+  const logoFilament = filamentById(shopFilaments, logoFilamentId, DEFAULT_LOGO_FILAMENT_ID);
+  const textFilament = filamentById(shopFilaments, textFilamentId, DEFAULT_TEXT_FILAMENT_ID);
+  const { meshes: relief, pending: reliefPending } = useReliefMeshes(
+    crops,
+    layers,
+    stops,
+    settings,
+    step === 3,
+  );
 
-  const unlocked = crops[0] ? 3 : image ? 2 : 1;
+  const unlocked = exampleOn ? 3 : crops[0] ? 3 : image ? 2 : 1;
 
   const applyArtwork = (
     src: string,
     name: string,
     detail: { artUrl: string; side: ExtendSide; subject: SubjectBounds },
   ) => {
+    clearExample();
+    setColoursTouched(false);
     setImage(src);
     setCommanderName(name);
     setArtUrl(detail.artUrl);
@@ -215,7 +248,6 @@ export default function Home() {
     setCrops(['', '', '']);
     setCropPx([null, null, null]);
     setCropBox(null);
-    setColoursTouched(false);
     setCropError('');
     setFlipError('');
   };
@@ -258,7 +290,8 @@ export default function Home() {
   ) : null;
 
   useEffect(() => {
-    if (!crops[0] || coloursTouched || filaments.length === 0) return;
+    if (exampleHoldRef.current) return;
+    if (!crops[0] || coloursTouched || shopFilaments.length === 0) return;
     let cancelled = false;
     const image = new Image();
     image.src = crops[0];
@@ -276,11 +309,11 @@ export default function Home() {
         rgba: new Uint8Array(pixels),
         width,
         height,
-        filaments,
+        filaments: shopFilaments,
         settings,
       });
       if (cancelled) return;
-      const byId = new Map(filaments.map((filament) => [filament.id, filament]));
+      const byId = new Map(shopFilaments.map((filament) => [filament.id, filament]));
       const nextLayers = choice.ids.map((id) => byId.get(id)).filter((filament): filament is Filament => Boolean(filament));
       if (nextLayers.length > 0) {
         setLayers(nextLayers);
@@ -290,7 +323,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [crops, coloursTouched, filaments, profile?.id, layerCount]);
+  }, [crops, coloursTouched, shopFilaments, profile?.id, layerCount, settings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,10 +339,44 @@ export default function Home() {
 
   useEffect(() => {
     setStops((current) => {
+      if (exampleHoldRef.current) {
+        const next = exampleEndLayers(layerCount);
+        if (current.length === next.length && current.every((stop, index) => stop === next[index])) return current;
+        return next;
+      }
       if (current.length === layers.length && current[current.length - 1] === layerCount) return current;
       return evenStops(layers.length, layerCount);
     });
   }, [layerCount, layers.length]);
+
+  const selectExample = async () => {
+    if (exampleBusy) return;
+    setExampleBusy(true);
+    setCropError('');
+    setFlipError('');
+    try {
+      const nextCrops = await loadExampleCrops();
+      exampleHoldRef.current = true;
+      setExampleOn(true);
+      setCommanderName('');
+      setArtUrl(null);
+      setSubject(null);
+      setImage(EXAMPLE_STITCHED);
+      setImageToken((current) => current + 1);
+      setCropBox(null);
+      setColoursTouched(true);
+      setLayers(exampleLayers(shopFilaments));
+      setStops(exampleEndLayers(layerCount));
+      setCrops(nextCrops);
+      setStep(3);
+    } catch (error) {
+      exampleHoldRef.current = false;
+      setExampleOn(false);
+      setCropError(error instanceof Error ? error.message : 'Could not load the example');
+    } finally {
+      setExampleBusy(false);
+    }
+  };
 
   return (
     <div className="min-h-full overflow-x-clip bg-gradient-to-b from-[#1a1a2e] to-[#16213e] font-serif text-white">
@@ -328,7 +395,7 @@ export default function Home() {
               <li key={label}>
                 <button
                   type="button"
-                  disabled={number > unlocked}
+                  disabled={number > unlocked || (exampleOn && number === 2)}
                   onClick={() => setStep(number)}
                   aria-current={active ? 'step' : undefined}
                   className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-2 text-sm ${
@@ -363,6 +430,28 @@ export default function Home() {
               {flipControl}
             </figure>
           )}
+          <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wide text-gray-500">
+            <span className="h-px flex-1 bg-white/10" />
+            or start from an example
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <button
+            type="button"
+            onClick={() => { void selectExample(); }}
+            disabled={exampleBusy}
+            aria-pressed={exampleOn}
+            className={`flex w-full items-center gap-4 rounded-xl border p-3 text-left transition disabled:opacity-60 ${
+              exampleOn ? 'border-[#e2c275] bg-white/10' : 'border-[#e2c275]/40 hover:border-[#e2c275]'
+            }`}
+          >
+            <img src={EXAMPLE_STITCHED} alt="" className="h-20 w-36 shrink-0 rounded-md object-cover sm:w-44" />
+            <span>
+              <span className="block text-base font-semibold text-[#e2c275]">Example</span>
+              <span className="mt-1 block text-xs text-gray-300">
+                {exampleBusy ? 'Loading the three faces…' : 'A finished design. Skips the crop and opens on the colours.'}
+              </span>
+            </span>
+          </button>
           <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wide text-gray-500">
             <span className="h-px flex-1 bg-white/10" />
             or upload your own art
@@ -437,11 +526,18 @@ export default function Home() {
                   lidName={lidName}
                   lidOpen={lidOpen}
                   shot={shot}
+                  relief={relief}
                 />
               )}
-              <p className="mt-2 text-center text-xs text-gray-400">Drag to turn the box. One finger rotates it. The lid slides out toward the card window.</p>
+              <p className="mt-2 text-center text-xs text-gray-400">
+                {reliefPending ? 'Updating the surface… ' : ''}
+                Drag to turn the box. One finger rotates it. The lid slides out toward the card window.
+              </p>
+              {exampleOn && (
+                <p className="mt-1 text-center text-xs text-[#e2c275]">Example design. The three faces are already cropped.</p>
+              )}
               <LidFinish
-                filaments={filaments}
+                filaments={shopFilaments}
                 boxId={boxFilament?.id ?? boxFilamentId}
                 logoId={logoFilament?.id ?? logoFilamentId}
                 textId={textFilament?.id ?? textFilamentId}
@@ -469,13 +565,14 @@ export default function Home() {
             </div>
             <div className="min-w-0">
               <ColorCore
-                filaments={filaments}
+                filaments={shopFilaments}
                 source={source}
                 layers={layers}
                 stops={stops}
                 layerCount={layerCount}
                 settings={settings}
                 onChange={(nextLayers, nextStops) => {
+                  exampleHoldRef.current = false;
                   setColoursTouched(true);
                   setLayers(nextLayers);
                   setStops(nextStops);
@@ -493,7 +590,7 @@ export default function Home() {
               profiles={profiles}
               onProfile={(id) => {
                 setProfileId(id);
-                setColoursTouched(false);
+                if (!exampleHoldRef.current) setColoursTouched(false);
               }}
               faceSizes={faceSizes}
               lid={boxFilament && logoFilament && textFilament ? {
@@ -512,7 +609,7 @@ export default function Home() {
           <button
             type="button"
             disabled={step === 1}
-            onClick={() => setStep((current) => Math.max(1, current - 1))}
+            onClick={() => setStep((current) => (exampleOn && current === 3 ? 1 : Math.max(1, current - 1)))}
             className="min-h-11 flex-1 rounded-md border border-white/20 px-4 text-sm disabled:opacity-40 sm:flex-none sm:px-6"
           >
             Back
@@ -520,8 +617,8 @@ export default function Home() {
           {step < 3 ? (
             <button
               type="button"
-              disabled={step === 1 ? !image : !crops[0]}
-              onClick={() => setStep((current) => Math.min(3, current + 1))}
+              disabled={step === 1 ? !image || (exampleOn && !crops[0]) : !crops[0]}
+              onClick={() => setStep((current) => (exampleOn && current === 1 ? 3 : Math.min(3, current + 1)))}
               className="min-h-11 flex-[2] rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:bg-gray-500 disabled:text-gray-200 sm:flex-none sm:px-8"
             >
               Next

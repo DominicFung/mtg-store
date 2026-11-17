@@ -9,7 +9,7 @@ import {
   shortFilamentName,
   TRANSMISSION_DENSITY,
   type CoreStop,
-} from '../../../packages/print-core/src/hueforge';
+} from '../../../packages/print-core/src/colourCore';
 import {
   buildFaceMesh,
   canonicalFaceName,
@@ -97,7 +97,7 @@ export async function buildOrderZip(input: {
       imageHeight: face.height,
       settings: input.settings,
       stops: input.stops,
-      header: 'HueForge',
+      header: 'colour-core',
       maxTriangles: Number.POSITIVE_INFINITY,
     });
     const project = `${input.orderNumber}-${faceName}.hfp`;
@@ -148,7 +148,7 @@ export async function buildOrderZip(input: {
   }
 
   zip.file('filament-layers.json', JSON.stringify({
-    note: 'One full-resolution HueForge colour-core STL per face. Customers do not receive this zip.',
+    note: 'One full-resolution colour-core STL per face. Customers do not receive this zip.',
     luminance: 'BT.601 luminance, smoothed by one 3x3 at a 0.10 mm detail size (coarser grids keep that blur width), stretched from black to white, then shifted by brightnessAdjust and clamped. Heights run from min depth to the top of the colour core. The +X and +Y edges are a one-cell lip at layer height and the back is flat at Z 0.',
     transmission: {
       model: '0.05 ** ((thicknessMm / td) * density)',

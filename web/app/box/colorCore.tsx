@@ -14,7 +14,7 @@ import {
   removeStop,
   type CoreStop,
   type LayerSettings,
-} from '../lib/hueforge';
+} from '../lib/colourCore';
 
 type DragState = { kind: 'filament'; id: string };
 

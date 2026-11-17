@@ -21,6 +21,8 @@ export {
   layerPalette,
   layerTopMm,
   layerTopUm,
+  meshTopMm,
+  depthLimitedLayer,
   luminanceFromRgba,
   maxChannelLuminance,
   minBlendLayer,
@@ -36,7 +38,7 @@ export {
   stretchToUnit,
   TRANSMISSION_DENSITY,
   transmission,
-} from '../../../packages/print-core/src/hueforge';
+} from '../../../packages/print-core/src/colourCore';
 
 export type {
   CoreStop,
@@ -44,4 +46,4 @@ export type {
   LayerSettings,
   RenderInput,
   Rgb,
-} from '../../../packages/print-core/src/hueforge';
+} from '../../../packages/print-core/src/colourCore';

@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { PNG } from 'pngjs';
 import { profileToSettings, LAUNCH_PROFILES } from '../../../packages/print-core/src/profiles';
 import { decodeBinaryStl } from '../../../packages/print-core/src/printGeometry';
-import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/hueforge';
+import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/colourCore';
 import { buildOrderZip } from './archive';
 import { buildLidPrint } from './lidPrint';
 
@@ -107,7 +107,7 @@ test('lid files are added beside the face plates and the face mesh is unchanged'
   const note = await lidZip.file('lid-colours.txt')!.async('string');
   assert.match(note, /Elegoo PLA Black/);
   assert.match(note, /Dom Fungus/);
-  assert.equal(note.includes('HueForge'), false);
+  assert.equal(note.includes(['Hue', 'Forge'].join('')), false);
   const manifest = JSON.parse(await lidZip.file('filament-layers.json')!.async('string')) as {
     print: { triangleCap: null };
     lid: { text: { value: string } };

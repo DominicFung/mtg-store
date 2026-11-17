@@ -1,5 +1,5 @@
 import { normalizeLidText } from '../../../packages/print-core/src/lidText';
-import { layerTopMm } from './hueforge';
+import { layerTopMm } from './colourCore';
 import type { Filament } from './filamentCatalogue';
 import type { NozzleProfile, ResolvedProfile } from './printGeometry';
 import { LAUNCH_PROFILES, profileToSettings, resolveProfile } from './printGeometry';

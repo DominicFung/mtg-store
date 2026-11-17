@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { hexToRgb, type CoreStop } from './hueforge';
+import { hexToRgb, type CoreStop } from './colourCore';
 import {
   buildFaceMesh,
   decodeBinaryStl,
@@ -68,7 +68,7 @@ function heightGrid(bytes: Uint8Array, cols: number, rows: number, widthMm: numb
   return grid;
 }
 
-test('the Eldrazi 0.4 mm plate matches the HueForge lattice, lip, and brightness-adjusted depth', () => {
+test('the Eldrazi 0.4 mm plate matches the colour-core lattice, lip, and brightness-adjusted depth', () => {
   assert.equal(meta.width, 376);
   assert.equal(meta.height, 418);
   assert.equal(rgba.byteLength, meta.width * meta.height * 4);
@@ -78,7 +78,7 @@ test('the Eldrazi 0.4 mm plate matches the HueForge lattice, lip, and brightness
     imageHeight: meta.height,
     settings,
     stops,
-    header: 'HueForge',
+    header: 'colour-core',
     maxTriangles: 50_000_000,
   });
   assert.equal(mesh.cols, 474);

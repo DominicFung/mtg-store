@@ -2,7 +2,7 @@
  * Filaments the shop sells, for the deck-box layer preview.
  *
  * `hex` and `td` are APPROXIMATE PLACEHOLDERS. They are not measured from the
- * spools. `td` is a HueForge-style transmission distance in millimetres (lower
+ * spools. `td` is a layered-filament transmission distance in millimetres (lower
  * means the colour covers what is underneath sooner). Replace both fields with
  * measured values and set `approximate` to false when that is done.
  *
@@ -194,6 +194,19 @@ export const MOCK_FILAMENTS: Filament[] = [
     finish: 'matte',
     sortOrder: 130,
     approximate: true,
+  },
+  {
+    id: 'deeplee-matte-white',
+    name: 'Deeplee Matte White',
+    hex: '#F4F1EA',
+    td: 5,
+    inStock: true,
+    brand: 'Deeplee',
+    material: 'PLA',
+    finish: 'matte',
+    sortOrder: 140,
+    approximate: true,
+    type: 'PLA',
   },
 ];
 
