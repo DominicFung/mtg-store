@@ -219,7 +219,7 @@ export const DEFAULT_LAYER_IDS = [
   'giantarm-silk-silver',
 ];
 
-export function sortFilaments(filaments: Filament[]): Filament[] {
+export function sortFilaments(filaments: readonly Filament[]): Filament[] {
   return [...filaments].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
