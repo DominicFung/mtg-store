@@ -28,6 +28,12 @@ type Props = {
   onChange: (layers: Filament[], stops: number[]) => void;
 };
 
+/** Place a fixed-height marker inside the bar. 1 is the top stop, 0 is the bottom. */
+function stopTop(fraction: number, sizePx: number): string {
+  const t = Math.min(1, Math.max(0, fraction));
+  return `calc(${1 - t} * (100% - ${sizePx}px))`;
+}
+
 function finishLabel(finish: Filament['finish']): string {
   if (!finish || finish === 'standard') return 'PLA';
   return finish;
@@ -284,8 +290,8 @@ export default function ColorCore({
                   event.preventDefault();
                   commit(layers, moveStop(safeStops, index, stop + (event.key === 'ArrowUp' ? 1 : -1), layerCount));
                 }}
-                className="absolute left-1/2 z-10 w-16 -translate-x-1/2 -translate-y-1/2"
-                style={{ bottom: `${(stop / layerCount) * 100}%` }}
+                className="absolute left-1/2 z-10 flex h-4 w-16 -translate-x-1/2 items-center justify-center"
+                style={{ top: stopTop(stop / layerCount, 16) }}
               >
                 <span className="mx-auto block h-3 w-3 rounded-full border-2 border-[#1a1a2e] bg-white shadow" />
               </div>
@@ -295,8 +301,8 @@ export default function ColorCore({
             {safeStops.map((stop, index) => (
               <span
                 key={`label-${index}`}
-                className="absolute right-0 -translate-y-1/2 whitespace-nowrap"
-                style={{ bottom: `${(stop / layerCount) * 100}%` }}
+                className="absolute right-0 h-8 text-right leading-tight whitespace-nowrap"
+                style={{ top: stopTop(stop / layerCount, 32) }}
               >
                 {stop}
                 <span className="block text-gray-500">{formatSwapDepth(stop, settings)}</span>

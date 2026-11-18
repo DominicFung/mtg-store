@@ -6,6 +6,13 @@ import { useEffect, useState } from 'react';
 import { trackOrder, type ShopOrder } from '../lib/shopOrders';
 import LidSummary from '../components/lidSummary';
 
+function paymentNote(status: string): string {
+  if (status === 'PAID') return 'Paid. We print the box and deliver it locally. Print files stay with the shop.';
+  if (status === 'UNPAID') return 'Waiting for the card payment. Print files stay with the shop.';
+  if (status === 'NOT_CONNECTED') return 'Pay when the shop confirms the print.';
+  return status;
+}
+
 export default function ReceiptClient() {
   const params = useSearchParams();
   const orderNumber = params.get('order') ?? '';
@@ -36,7 +43,7 @@ export default function ReceiptClient() {
             <p>{order.name} · {order.email}</p>
             <p>Status <span className="text-[#e2c275]">{label(order.status)}</span></p>
             <p>Price <span className="text-[#e2c275]">{order.priceLabel}</span></p>
-            <p className="text-xs text-gray-500">Payment is not collected in the shop yet. {order.paymentStatus === 'NOT_CONNECTED' ? 'Pay when the shop confirms the print.' : order.paymentStatus}</p>
+            <p className="text-xs text-gray-500">{paymentNote(order.paymentStatus)}</p>
             <p className="text-sm">{order.profileName} nozzle · {order.layerCount} colour layers</p>
             {order.previews.some(Boolean) && (
               <div className="grid grid-cols-3 gap-2">

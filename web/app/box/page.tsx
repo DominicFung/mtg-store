@@ -40,9 +40,11 @@ import {
   withDeeplee,
 } from '../lib/exampleDesign';
 import { useReliefMeshes } from '../lib/useReliefMeshes';
+import { cropToFaces } from './prepareCrops';
+import { imageCoversCrop } from '../../../packages/print-core/src/outpaint';
 
 const EMPTY_TEXTURES: [string, string, string] = ['', '', ''];
-const STEPS = ['Commander', 'Crop', 'Colours'] as const;
+const STEPS = ['Commander', 'Crop', 'Colours', 'Checkout'] as const;
 
 const startingLayers = defaultLayerSelection(MOCK_FILAMENTS);
 
@@ -75,6 +77,7 @@ export default function Home() {
   const [lidOpen, setLidOpen] = useState(0);
   const [shot, setShot] = useState<string | null>(null);
   const [exampleOn, setExampleOn] = useState(false);
+  const [cropSkipped, setCropSkipped] = useState(false);
   const [exampleBusy, setExampleBusy] = useState(false);
   const exampleHoldRef = useRef(false);
   const exampleOnRef = useRef(false);
@@ -151,8 +154,31 @@ export default function Home() {
   }, [shopFilaments, fallbackSettings]);
 
   useEffect(() => {
-    if (step === 3) setPreviewReady(true);
+    if (step >= 3) setPreviewReady(true);
   }, [step]);
+
+  useEffect(() => {
+    if (!image || exampleOn) {
+      setCropSkipped(false);
+      return undefined;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.src = image;
+    img.decode().then(async () => {
+      if (cancelled) return;
+      const skip = imageCoversCrop(img.naturalWidth, img.naturalHeight);
+      setCropSkipped(skip);
+      if (!skip) return;
+      const faces = await cropToFaces(img, subject);
+      if (!cancelled) setCrops(faces);
+    }).catch(() => {
+      if (!cancelled) setCropSkipped(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [image, imageToken, exampleOn, subject]);
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -250,7 +276,8 @@ export default function Home() {
     step === 3,
   );
 
-  const unlocked = exampleOn ? 3 : crops[0] ? 3 : image ? 2 : 1;
+  const skipCrop = exampleOn || cropSkipped;
+  const unlocked = image || exampleOn ? (crops[0] ? 4 : 2) : 1;
 
   const applyArtwork = (
     src: string,
@@ -410,7 +437,7 @@ export default function Home() {
           <p className="mt-1 text-sm text-gray-300">Find your commander, crop the three faces, then adjust the colours. We print it.</p>
         </header>
 
-        <ol className="mb-2 grid grid-cols-3 gap-2" aria-label="Progress">
+        <ol className="mb-2 grid grid-cols-4 gap-2" aria-label="Progress">
           {STEPS.map((label, index) => {
             const number = index + 1;
             const active = step === number;
@@ -419,7 +446,7 @@ export default function Home() {
               <li key={label}>
                 <button
                   type="button"
-                  disabled={number > unlocked || (exampleOn && number === 2)}
+                  disabled={number > unlocked}
                   onClick={() => setStep(number)}
                   aria-current={active ? 'step' : undefined}
                   className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-2 text-sm ${
@@ -440,7 +467,7 @@ export default function Home() {
           })}
         </ol>
         <p className="mb-4 text-center text-xs text-gray-400">
-          Step {step} of 3. Going back keeps your artwork, crop, and colours.
+          Step {step} of {STEPS.length}. Going back keeps your artwork, crop, and colours.
         </p>
 
         <div className={step === 1 ? 'block' : 'hidden'}>
@@ -573,18 +600,6 @@ export default function Home() {
                 onName={setLidName}
                 onOpen={(value) => setLidOpen(clampLidOpen(value))}
               />
-              {layered[0] && (
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {layered.map((src, index) => (
-                    <img
-                      key={`layered-face-${index}`}
-                      src={src}
-                      alt={`Filament preview of the ${['right side', 'spine', 'left side'][index]}`}
-                      className="w-full rounded bg-black/40"
-                    />
-                  ))}
-                </div>
-              )}
               {commanderName && <p className="mt-2 text-center text-sm text-[#e2c275]">{commanderName}</p>}
             </div>
             <div className="min-w-0">
@@ -604,6 +619,8 @@ export default function Home() {
               />
             </div>
           </div>
+        </div>
+        <div className={step === 4 ? 'block min-w-0' : 'hidden'}>
           {profile && (
             <OrderPanel
               crops={crops}
@@ -633,22 +650,22 @@ export default function Home() {
           <button
             type="button"
             disabled={step === 1}
-            onClick={() => setStep((current) => (exampleOn && current === 3 ? 1 : Math.max(1, current - 1)))}
+            onClick={() => setStep((current) => Math.max(1, current - 1))}
             className="min-h-11 flex-1 rounded-md border border-white/20 px-4 text-sm disabled:opacity-40 sm:flex-none sm:px-6"
           >
             Back
           </button>
-          {step < 3 ? (
+          {step < STEPS.length ? (
             <button
               type="button"
-              disabled={step === 1 ? !image || (exampleOn && !crops[0]) : !crops[0]}
-              onClick={() => setStep((current) => (exampleOn && current === 1 ? 3 : Math.min(3, current + 1)))}
+              disabled={step === 1 ? !image || ((skipCrop) && !crops[0]) : !crops[0]}
+              onClick={() => setStep((current) => (current === 1 && skipCrop ? 3 : Math.min(STEPS.length, current + 1)))}
               className="min-h-11 flex-[2] rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:bg-gray-500 disabled:text-gray-200 sm:flex-none sm:px-8"
             >
               Next
             </button>
           ) : (
-            <p className="flex flex-[2] items-center text-sm text-gray-300 sm:flex-none">Place the order in the form above.</p>
+            <p className="flex flex-[2] items-center text-sm text-gray-300 sm:flex-none">Pay in the form above.</p>
           )}
         </div>
       </div>

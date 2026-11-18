@@ -1,11 +1,14 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BOX_PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
+import { checkDelivery } from '../../../packages/print-core/src/deliveryArea';
 import type { Filament } from '../lib/filamentCatalogue';
 import type { ResolvedProfile } from '../lib/printGeometry';
 import LidSummary from '../components/lidSummary';
-import { lidFromChoice, placeOrder, shopConfigured, type LidChoice } from '../lib/shopOrders';
+import { cardPaymentsReady } from '../lib/publicConfig';
+import { lidFromChoice, placeOrder, shopConfigured, startCardPayment, type LidChoice } from '../lib/shopOrders';
 
 type Props = {
   crops: [string, string, string];
@@ -27,15 +30,23 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
   const [email, setEmail] = useState('');
   const [addressLine1, setAddressLine1] = useState('');
   const [city, setCity] = useState('');
-  const [region, setRegion] = useState('');
+  const [region, setRegion] = useState('Ontario');
   const [postalCode, setPostalCode] = useState('');
-  const [country, setCountry] = useState('');
+  const [country, setCountry] = useState('Canada');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const paymentsOn = cardPaymentsReady();
+  const delivery = useMemo(
+    () => checkDelivery({ city, region, postalCode, country }),
+    [city, region, postalCode, country],
+  );
+  const identityReady = name.trim().length > 0 && email.includes('@') && addressLine1.trim().length > 0;
+  const canPay = paymentsOn && delivery.ok && identityReady && Boolean(crops[0]) && !submitting;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!canPay) return;
     setSubmitting(true);
     setError('');
     try {
@@ -55,10 +66,10 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
         previews: previews[0] ? previews : crops,
         lid: lid ?? undefined,
       });
-      const params = new URLSearchParams({ order: order.orderNumber, email: order.email });
-      router.push(`/receipt?${params.toString()}`);
+      const url = await startCardPayment(order);
+      window.location.assign(url);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not place the order');
+      setError(caught instanceof Error ? caught.message : 'Could not start the payment');
       setSubmitting(false);
     }
   };
@@ -101,18 +112,19 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
         <h2 className="text-sm font-semibold text-[#e2c275]">Order</h2>
         {lid && <div className="mt-3"><LidSummary lid={lidFromChoice(lid)} /></div>}
         <p className="mt-1 text-xs text-gray-400">
-          We print the box. You get a receipt and a tracking page. Print files stay with the shop.
+          We print the box and deliver it in person around Toronto, Mississauga, Milton, and Etobicoke.
+          You get a receipt and a tracking page. Print files stay with the shop.
           {' '}
-          {shopConfigured() ? 'This order is sent to the shop.' : 'The shop API is not configured, so this order stays in this browser.'}
+          {shopConfigured() ? 'This order is sent to the shop after you pay.' : 'The shop API is not configured, so a paid order cannot be sent yet.'}
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field id="order-name" label="Name" value={name} onChange={setName} required />
           <Field id="order-email" label="Email" type="email" value={email} onChange={setEmail} required />
-          <Field id="order-address" label="Address" value={addressLine1} onChange={setAddressLine1} className="sm:col-span-2" />
-          <Field id="order-city" label="City" value={city} onChange={setCity} />
-          <Field id="order-region" label="Region" value={region} onChange={setRegion} />
-          <Field id="order-postal" label="Postal code" value={postalCode} onChange={setPostalCode} />
-          <Field id="order-country" label="Country" value={country} onChange={setCountry} />
+          <Field id="order-address" label="Address" value={addressLine1} onChange={setAddressLine1} className="sm:col-span-2" required />
+          <Field id="order-city" label="City" value={city} onChange={setCity} required />
+          <Field id="order-region" label="Province" value={region} onChange={setRegion} required />
+          <Field id="order-postal" label="Postal code" value={postalCode} onChange={setPostalCode} required />
+          <Field id="order-country" label="Country" value={country} onChange={setCountry} required />
         </div>
         <label className="mt-3 block text-xs text-gray-400" htmlFor="order-note">Note</label>
         <textarea
@@ -123,17 +135,23 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
           className="mt-1 w-full rounded-md border border-white/15 bg-[#12182c] px-3 py-2 text-sm"
         />
         <p className="mt-3 text-sm">
-          Price <span className="text-[#e2c275]">{'Price confirmed before printing'}</span>
+          Price <span className="text-[#e2c275]">{BOX_PRICE_LABEL}</span>
+          <span className="text-gray-400"> per box, delivered locally.</span>
         </p>
-        <p className="text-xs text-gray-500">Payment is not collected here yet.</p>
+        <p className={`mt-2 text-sm ${delivery.ok ? 'text-emerald-200' : 'text-amber-200'}`} role="status">
+          {delivery.message}
+        </p>
+        {!paymentsOn && (
+          <p className="mt-2 text-sm text-[#e2c275]">Online payment coming soon. We can still check that we deliver to your address. The pay button stays off until card payment is switched on.</p>
+        )}
       </div>
       {error && <p className="text-sm text-amber-200">{error}</p>}
       <button
         type="submit"
-        disabled={!crops[0] || submitting}
+        disabled={!canPay}
         className="min-h-11 w-full rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:bg-gray-500 disabled:text-gray-200 sm:w-auto"
       >
-        {submitting ? 'Placing order…' : 'Place order'}
+        {submitting ? 'Starting payment…' : paymentsOn ? `Pay ${BOX_PRICE_LABEL}` : 'Online payment coming soon'}
       </button>
     </form>
   );
@@ -157,6 +175,7 @@ function Field({ id, label, value, onChange, type = 'text', required = false, cl
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        autoComplete={id === 'order-postal' ? 'postal-code' : id === 'order-city' ? 'address-level2' : 'on'}
         className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-[#12182c] px-3 text-sm text-white"
       />
     </label>
