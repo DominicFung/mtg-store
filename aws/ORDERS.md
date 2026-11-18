@@ -105,4 +105,39 @@ Deploy **`mtgstore-OrdersStack`** as well so the generator writes the lid files 
 
 ## Payments
 
-`paymentStatus` is `NOT_CONNECTED`. The hook is the comment marked `PAYMENT_HOOK` in `submitOrder`. Price on the receipt is "Price confirmed before printing".
+A new box is **CA$55** (`BOX_PRICE_CENTS` is 5500). New orders are stored as `UNPAID`. The Stripe webhook sets `paymentStatus` to `PAID`. Older rows may still say `NOT_CONNECTED`. Customers still never receive print files. The shop notice still goes to the `notifyEmail` used at deploy.
+
+Card payment is a separate stack, `mtgstore-PaymentsStack`. It adds two Secrets Manager secrets and two function URLs. It does not replace the GraphQL API, `ShopApiKey20261112`, the Dynamo tables, the queues, or the buckets.
+
+```bash
+npx cdk deploy mtgstore-PaymentsStack -c notifyEmail=you@example.com --require-approval broadening
+```
+
+The secrets are created as `REPLACE_ME`. Until they are replaced, and until the web build has a real publishable key and the checkout URL, the checkout step says "Online payment coming soon" and the pay button stays off. The address check still runs. The Lambdas answer `payments not configured` instead of crashing.
+
+Replace the keys in the console. Do not change the `REPLACE_ME` strings in the CDK template, or the next deploy writes the placeholder back over the real values.
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id mtgstore/stripe/secret-key \
+  --secret-string 'sk_test_...' \
+  --region us-east-1
+
+aws secretsmanager put-secret-value \
+  --secret-id mtgstore/stripe/webhook-secret \
+  --secret-string 'whsec_...' \
+  --region us-east-1
+```
+
+Use Stripe test mode. In the Stripe dashboard, add a webhook endpoint for the `StripeWebhookUrl` output and subscribe to `checkout.session.completed`. Put that endpoint's signing secret in `mtgstore/stripe/webhook-secret`.
+
+Amplify build environment, then rebuild the web app:
+
+```bash
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+NEXT_PUBLIC_PAYMENTS_URL=<CheckoutUrl output>
+```
+
+A placeholder such as `pk_test_REPLACE_ME`, or a missing URL, keeps the coming-soon state.
+
+Delivery is in person only. The postal-code FSA decides when one is present: Toronto is every `M` code (including North York, Scarborough, East York, York, and Etobicoke `M8`/`M9`), Mississauga is `L4T L4V L4W L4X L4Y L4Z` and `L5A L5B L5C L5E L5G L5H L5J L5K L5L L5M L5N L5P L5R L5S L5T L5V L5W`, and Milton is `L9T` and `L9E`. A city name is used only when the postal code is missing.

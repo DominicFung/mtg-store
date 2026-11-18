@@ -5,7 +5,8 @@ import type { NozzleProfile, ResolvedProfile } from './printGeometry';
 import { LAUNCH_PROFILES, profileToSettings, resolveProfile } from './printGeometry';
 import { newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
 import type { ExtendSide, SubjectBounds } from '../../../packages/print-core/src/outpaint';
-import { publicConfig } from './publicConfig';
+import { PAYMENTS_NOT_CONFIGURED } from '../../../packages/print-core/src/stripeReady';
+import { cardPaymentsReady, publicConfig } from './publicConfig';
 
 export type OutpaintArt = {
   image: string;
@@ -248,6 +249,23 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ShopOrder> {
   };
   writeOrders([order, ...readOrders()]);
   return order;
+}
+
+export async function startCardPayment(order: { orderNumber: string; email: string }): Promise<string> {
+  if (!cardPaymentsReady()) throw new Error(PAYMENTS_NOT_CONFIGURED);
+  const response = await fetch(publicConfig.paymentsUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      orderNumber: order.orderNumber,
+      email: order.email,
+      successUrl: `${window.location.origin}/receipt?order=${encodeURIComponent(order.orderNumber)}&email=${encodeURIComponent(order.email)}`,
+      cancelUrl: `${window.location.origin}/box`,
+    }),
+  });
+  const body = await response.json() as { url?: string; message?: string };
+  if (!response.ok || !body.url) throw new Error(body.message || PAYMENTS_NOT_CONFIGURED);
+  return body.url;
 }
 
 export async function trackOrder(orderNumber: string, email: string): Promise<ShopOrder | null> {

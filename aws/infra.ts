@@ -6,6 +6,7 @@ import { AppsyncStack } from './stacks/appsync-stack'
 import { IamStack } from './stacks/iam-stack'
 import { AuthStack } from './stacks/auth-stack'
 import { OrdersStack } from './stacks/orders-stack'
+import { PaymentsStack } from './stacks/payments-stack'
 
 const PROJECT_NAME = 'mtgstore'
 
@@ -29,6 +30,9 @@ const ordersStack = new OrdersStack(app, `${PROJECT_NAME}-OrdersStack`, {
   customerStatusEmails,
 })
 ordersStack.addDependency(dynamoStack)
+
+const paymentsStack = new PaymentsStack(app, `${PROJECT_NAME}-PaymentsStack`, { name: PROJECT_NAME })
+paymentsStack.addDependency(dynamoStack)
 
 const appsyncStack = new AppsyncStack(app, `${PROJECT_NAME}-AppsyncStack`, {
   name: PROJECT_NAME,

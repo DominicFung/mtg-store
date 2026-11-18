@@ -4,6 +4,14 @@ export const BOX_FACE_HEIGHT = 326;
 export const BOX_WRAP_WIDTH = BOX_FACE_WIDTHS[0] + BOX_FACE_WIDTHS[1] + BOX_FACE_WIDTHS[2];
 export const WRAP_ASPECT = BOX_WRAP_WIDTH / BOX_FACE_HEIGHT;
 
+/** Skip the crop step when the artwork already covers that frame with about 10% margin on both sides. */
+export const CROP_SKIP_MARGIN = 1.1;
+
+export function imageCoversCrop(width: number, height: number): boolean {
+  if (!(width >= 1) || !(height >= 1)) return false;
+  return width >= BOX_WRAP_WIDTH * CROP_SKIP_MARGIN && height >= BOX_FACE_HEIGHT * CROP_SKIP_MARGIN;
+}
+
 /** Stability Image Outpaint allows at most 2000 pixels on a side. */
 export const STABILITY_MAX_MARGIN = 2000;
 

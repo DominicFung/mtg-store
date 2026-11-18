@@ -1,6 +1,10 @@
-export const PRICE_LABEL = 'Price confirmed before printing';
-/** Payments are not wired. See the PAYMENT_HOOK in submitOrder. */
-export const PAYMENT_STATUS = 'NOT_CONNECTED';
+/** One Commander deck box, in Canadian cents. There was no numeric price before this. */
+export const BOX_PRICE_CENTS = 5500;
+export const BOX_PRICE_LABEL = 'CA$55';
+export const PRICE_LABEL = BOX_PRICE_LABEL;
+/** New orders wait for the card payment. Older rows may still say NOT_CONNECTED. */
+export const PAYMENT_STATUS = 'UNPAID';
+export const PAYMENT_STATUS_PAID = 'PAID';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 

@@ -89,7 +89,7 @@ export const handler = async (event: AppSyncResolverEvent<{ input: unknown }>) =
     createdAt: now,
     updatedAt: now,
     priceLabel: PRICE_LABEL,
-    // PAYMENT_HOOK: replace NOT_CONNECTED with a payment intent before confirmOrder.
+    // The checkout Lambda starts the card payment. The webhook sets this to PAID.
     paymentStatus: PAYMENT_STATUS,
     note: input.note,
     addressLine1: input.addressLine1,
