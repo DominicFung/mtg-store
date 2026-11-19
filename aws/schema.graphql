@@ -24,7 +24,8 @@ type Filament {
 # Distances are millimetres. height is the shared face height; each crop's
 # width follows its aspect. width remains the nominal back-face width.
 # minDepth, maxDepth, borderWidth, borderDepth, and detailSize are additive.
-type PrintSettings {
+# Read with the shop API key and written by the admin group.
+type PrintSettings @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   id: ID!
   layerHeight: Float!
   baseLayerHeight: Float!
@@ -53,7 +54,8 @@ input UpdatePrintSettingsInput {
 
 # Nozzle profiles are configurable without a deploy. layerCount is derived.
 # Writes are admin-only. Customers can read the active profiles.
-type NozzleProfile {
+# Active profiles are public. The full list and writes are admin.
+type NozzleProfile @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   id: ID!
   name: String!
   nozzleSize: Float!
@@ -94,7 +96,7 @@ input UpsertNozzleProfileInput {
   isDefault: Boolean!
 }
 
-type OrderStop {
+type OrderStop @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   filamentId: String!
   name: String!
   hex: String!
@@ -105,7 +107,7 @@ type OrderStop {
   depthMm: Float!
 }
 
-type OrderHistoryEntry {
+type OrderHistoryEntry @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   status: String!
   at: String!
   actor: String!
@@ -113,7 +115,7 @@ type OrderHistoryEntry {
 }
 
 # Shell, lid, spark, and optional name. Additive. Older orders leave it null.
-type OrderLid {
+type OrderLid @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   boxFilamentId: String!
   boxFilamentName: String!
   boxHex: String!
@@ -133,7 +135,8 @@ input OrderLidInput {
   textFilamentId: String
 }
 
-type OrderSummary {
+# confirmOrder uses the API key. Admin queries use the admin group.
+type OrderSummary @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   orderId: ID!
   orderNumber: String!
   email: String!
@@ -157,7 +160,8 @@ type OrderSummary {
   country: String
 }
 
-type OrderDetail {
+# trackOrder uses the API key. The admin order page uses the admin group.
+type OrderDetail @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   orderId: ID!
   orderNumber: String!
   email: String!
@@ -189,7 +193,7 @@ type OrderDetail {
   deliveryPhotoUrl: String
 }
 
-type DeliveryPhotoUpload {
+type DeliveryPhotoUpload @aws_cognito_user_pools(cognito_groups: ["admin"]) {
   key: String!
   url: String!
   headersJson: String!

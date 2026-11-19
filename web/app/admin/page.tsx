@@ -20,11 +20,14 @@ import {
   type ShopOrder,
 } from '../lib/shopOrders';
 import { LAUNCH_PROFILES, resolveProfile, type NozzleProfile, type ResolvedProfile } from '../lib/printGeometry';
+import FacePreviews from '../components/facePreviews';
 import LidSummary from '../components/lidSummary';
 
 const STATUSES = ['', 'RECEIVED', 'GENERATING_FILES', 'READY_TO_PRINT', 'PRINTING', 'READY_TO_SHIP', 'SHIPPED', 'DELIVERED', 'FAILED', 'CANCELLED'];
 
 function fulfillmentLabel(status: string, _paymentStatus: string): string {
+  if (status === 'GENERATING_FILES') return 'Generating files';
+  if (status === 'READY_TO_PRINT') return 'Ready to print';
   if (status === 'PRINTING') return 'Printing';
   if (status === 'READY_TO_SHIP') return 'Ready to ship';
   if (status === 'SHIPPED') return 'Out for delivery';
@@ -88,12 +91,18 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<ShopOrder | null>(null);
   const [profiles, setProfiles] = useState<ResolvedProfile[]>(LAUNCH_PROFILES.map(resolveProfile));
   const [message, setMessage] = useState('');
+  const [listError, setListError] = useState('');
   const [pending, setPending] = useState<{ id: string; direction: 'next' | 'previous' } | null>(null);
 
   const refresh = async (nextStatus = status, nextEmail = filterEmail) => {
-    const rows = await listShopOrders({ status: nextStatus, email: nextEmail });
-    setOrders(rows);
-    setProfiles(readProfiles());
+    try {
+      const rows = await listShopOrders({ status: nextStatus, email: nextEmail });
+      setOrders(rows);
+      setProfiles(readProfiles());
+      setListError('');
+    } catch (caught) {
+      setListError(caught instanceof Error ? caught.message : 'Could not load orders');
+    }
   };
 
   useEffect(() => {
@@ -122,6 +131,7 @@ export default function AdminPage() {
           <button type="button" className="min-h-11 rounded-md border border-white/20 px-3 text-sm" onClick={() => { adminSignOut(); setSignedIn(false); setPreview(false); }}>Sign out</button>
         </div>
         {!shopConfigured() && <p className="mt-2 text-xs text-gray-400">Shop API is not configured. This list is stored in this browser. Deployed admin calls require the Cognito admin group.</p>}
+        {listError && <p className="mt-3 rounded-md border border-amber-300/40 bg-amber-950/40 p-3 text-sm text-amber-100" role="alert">{listError}</p>}
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <label className="text-xs text-gray-400" htmlFor="filter-status">Status
             <select id="filter-status" value={status} onChange={(event) => { setStatus(event.target.value); void refresh(event.target.value, filterEmail); }} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-[#1a1a2e] px-2 sm:w-56">
@@ -160,11 +170,7 @@ export default function AdminPage() {
                 <p className="mt-2 text-xs text-gray-400">The print bundle names these filaments and includes the shell, the lid, the logo, and the name as separate pieces.</p>
               </div>
             )}
-            {selected.previews?.some(Boolean) && (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {selected.previews.map((src, index) => src ? <img key={index} src={src} alt="" className="aspect-[4/5] w-full rounded bg-black/40 object-cover" /> : null)}
-              </div>
-            )}
+            {selected.previews?.some(Boolean) && <div className="mt-3"><FacePreviews urls={selected.previews} /></div>}
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" className="min-h-11 rounded-md border border-white/20 px-3 text-sm" onClick={() => { void change('PRINTING'); }}>Mark printing</button>
               <button type="button" className="min-h-11 rounded-md border border-white/20 px-3 text-sm" onClick={() => { void change('SHIPPED', 'Canada Post', 'CP000111222CA'); }}>Mark shipped</button>

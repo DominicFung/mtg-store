@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { trackOrder, type ShopOrder } from '../lib/shopOrders';
+import FacePreviews from '../components/facePreviews';
 import LidSummary from '../components/lidSummary';
 
 function paymentNote(status: string): string {
@@ -69,19 +70,6 @@ export default function ReceiptClient() {
         )}
       </div>
     </main>
-  );
-}
-
-function FacePreviews({ urls }: { urls: string[] }) {
-  const labels = ['Right side', 'Spine', 'Left side'];
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {urls.map((src, index) => (
-        src ? (
-          <img key={index} src={src} alt={labels[index] ?? 'Face of the print'} className="aspect-[4/5] w-full rounded bg-black/40 object-cover" />
-        ) : <div key={index} className="aspect-[4/5] rounded bg-black/40" />
-      ))}
-    </div>
   );
 }
 

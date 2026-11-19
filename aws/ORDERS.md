@@ -146,7 +146,15 @@ SES is still in the sandbox until production access is granted. The From address
 
 ## Fulfillment
 
-`/admin` lists orders newest first: order number, customer, date, paid or not, and the current step, with a link to `/admin/orders/<orderId>`. Both pages have one button that walks Received, Printing, Ready to ship, Out for delivery, then Delivered. The list asks for a confirm tap. Either page can undo the last step. Each move appends the existing history array with a timestamp.
+`OrderSummary`, `OrderDetail`, `OrderHistoryEntry`, `OrderStop`, `OrderLid`, `PrintSettings`, and `NozzleProfile` allow both the shop API key and the admin group. `DeliveryPhotoUpload` is admin only. Without those directives an admin token is rejected on the fields and `/admin` stays empty. Deploy only `mtgstore-AppsyncStack` for this schema change. The API id stays the same.
+
+```bash
+npx cdk deploy mtgstore-AppsyncStack -c notifyEmail=you@example.com --require-approval broadening
+```
+
+Rebuild the web app after that so the admin list can show an API error, and so the preview frames keep an equal height without putting `aspect-ratio` on the `img`.
+
+`/admin` lists orders newest first: order number, customer, date, paid or not, and the current step, with a link to `/admin/orders/<orderId>`. All statuses reads the `status-createdAt` index once per status, so a row still shows when it has no `shop` attribute. `MR-T8ST18X2` is one of those test rows. A row whose status is missing or not one of the known statuses stays hidden until that field is backfilled. Both pages have one button that walks Received, Printing, Ready to ship, Out for delivery, then Delivered. The list asks for a confirm tap. Either page can undo the last step. Each move appends the existing history array with a timestamp.
 
 Delivered is not a plain status change. The order must already be out for delivery, and the button opens the phone camera (`accept="image/*"` and `capture="environment"`). The page shrinks the photo in the browser, asks `requestDeliveryPhotoUpload` for an admin-only presigned PUT, stores the object at `orders/<orderId>/delivery/<timestamp>.jpg` in the private order bucket, then `confirmDelivery` saves that key. Tracking shows the photo only after delivery, through a one-hour presigned GET minted by `trackOrder` for that order number and email. `downloadUrl` and `profileSnapshotJson` stay null on that response.
 

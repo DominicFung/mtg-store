@@ -7,9 +7,10 @@ import {
   canRetry,
   customerStatusEmail,
   isOrderStatus,
+  newestOrders,
   nextFulfillment,
+  ORDER_STATUSES,
   previousFulfillment,
-  SHOP_PARTITION,
   type OrderStatus,
 } from '../../orders/logic';
 import {
@@ -78,11 +79,19 @@ async function listOrders(args: Args) {
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: { ':status': status } as Record<string, unknown>,
       }
-      : {
-        IndexName: 'shop-createdAt',
-        KeyConditionExpression: 'shop = :shop',
-        ExpressionAttributeValues: { ':shop': SHOP_PARTITION } as Record<string, unknown>,
-      };
+      : null;
+  if (!query) {
+    const pages = await Promise.all(ORDER_STATUSES.map((entry) => documentClient.send(new QueryCommand({
+      TableName: table,
+      IndexName: 'status-createdAt',
+      KeyConditionExpression: '#status = :status',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':status': entry },
+      Limit: limit,
+      ScanIndexForward: false,
+    }))));
+    return newestOrders(pages.map((page) => (page.Items ?? []) as OrderItem[]), limit).map((item) => summary(item));
+  }
   const result = await documentClient.send(new QueryCommand({
     TableName: table,
     ...query,
