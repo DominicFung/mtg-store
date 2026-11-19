@@ -1,6 +1,6 @@
-import { App, CfnOutput, Duration, Fn, RemovalPolicy, SecretValue, Stack } from 'aws-cdk-lib'
+import { App, CfnOutput, Duration, Fn, Stack } from 'aws-cdk-lib'
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
-import { FunctionUrlAuthType, HttpMethod, Runtime } from 'aws-cdk-lib/aws-lambda'
+import { CfnPermission, FunctionUrlAuthType, HttpMethod, Runtime } from 'aws-cdk-lib/aws-lambda'
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
 import { join } from 'path'
@@ -10,13 +10,15 @@ interface PaymentsProps {
 }
 
 /**
- * Card payment for a deck box. New resources only: two secrets with placeholder
- * values, and two public function URLs. It does not change the GraphQL API,
- * the shop key, or any existing table, queue, or bucket.
+ * Card payment for a deck box. Public function URLs, plus read access to the
+ * two Stripe secrets. It does not change the GraphQL API, the shop key, or
+ * any existing table, queue, or bucket.
  *
- * Replace the placeholder secret values in Secrets Manager. Leave this
- * template's REPLACE_ME strings as they are, or a later deploy will write the
- * placeholder back over the real keys.
+ * The secrets mtgstore/stripe/secret-key and mtgstore/stripe/webhook-secret
+ * already exist. This stack only looks them up by name. CloudFormation does
+ * not create them and does not write their values. The first deploy created
+ * them with DeletionPolicy Retain, so taking them out of the template leaves
+ * the secrets, and the current secret-key value, in place.
  */
 export class PaymentsStack extends Stack {
   constructor(app: App, id: string, props: PaymentsProps) {
@@ -24,20 +26,8 @@ export class PaymentsStack extends Stack {
 
     const ordersTableArn = Fn.importValue(`${props.name}-OrdersTable-Arn`)
     const ordersTableName = Fn.importValue(`${props.name}-OrdersTable-Name`)
-    const placeholder = SecretValue.unsafePlainText('REPLACE_ME')
-
-    const secretKey = new Secret(this, 'StripeSecretKey', {
-      secretName: `${props.name}/stripe/secret-key`,
-      description: 'Stripe secret key. Replace REPLACE_ME with the test key sk_test_...',
-      secretStringValue: placeholder,
-      removalPolicy: RemovalPolicy.RETAIN,
-    })
-    const webhookSecret = new Secret(this, 'StripeWebhookSecret', {
-      secretName: `${props.name}/stripe/webhook-secret`,
-      description: 'Stripe webhook signing secret. Replace REPLACE_ME with whsec_...',
-      secretStringValue: placeholder,
-      removalPolicy: RemovalPolicy.RETAIN,
-    })
+    const secretKey = Secret.fromSecretNameV2(this, 'StripeSecretKey', `${props.name}/stripe/secret-key`)
+    const webhookSecret = Secret.fromSecretNameV2(this, 'StripeWebhookSecret', `${props.name}/stripe/webhook-secret`)
 
     const shared = {
       runtime: Runtime.NODEJS_22_X,
@@ -82,6 +72,8 @@ export class PaymentsStack extends Stack {
     const webhookUrl = webhook.addFunctionUrl({
       authType: FunctionUrlAuthType.NONE,
     })
+    allowPublicInvoke(checkout, 'CreateCheckoutPublicInvoke')
+    allowPublicInvoke(webhook, 'StripeWebhookPublicInvoke')
 
     new CfnOutput(this, `${props.name}-CheckoutUrl`, {
       value: checkoutUrl.url,
@@ -92,4 +84,21 @@ export class PaymentsStack extends Stack {
       description: 'Stripe webhook endpoint. Subscribe to checkout.session.completed.',
     })
   }
+}
+
+/**
+ * Public function URLs need both lambda:InvokeFunctionUrl and
+ * lambda:InvokeFunction. CDK already adds the first. This adds the second,
+ * limited to calls that arrive through the function URL.
+ *
+ * InvokedViaFunctionUrl is a CloudFormation property. This CDK release does
+ * not type it, so it is set with a property override.
+ */
+function allowPublicInvoke(fn: NodejsFunction, id: string) {
+  const permission = new CfnPermission(fn, id, {
+    action: 'lambda:InvokeFunction',
+    functionName: fn.functionArn,
+    principal: '*',
+  })
+  permission.addPropertyOverride('InvokedViaFunctionUrl', true)
 }
