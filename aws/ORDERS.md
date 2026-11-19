@@ -107,15 +107,15 @@ Deploy **`mtgstore-OrdersStack`** as well so the generator writes the lid files 
 
 A new box is **CA$55** (`BOX_PRICE_CENTS` is 5500). New orders are stored as `UNPAID`. The Stripe webhook sets `paymentStatus` to `PAID`. Older rows may still say `NOT_CONNECTED`. Customers still never receive print files. The shop notice still goes to the `notifyEmail` used at deploy.
 
-Card payment is a separate stack, `mtgstore-PaymentsStack`. It adds two Secrets Manager secrets and two function URLs. It does not replace the GraphQL API, `ShopApiKey20261112`, the Dynamo tables, the queues, or the buckets.
+Card payment is a separate stack, `mtgstore-PaymentsStack`. It adds two public function URLs. It looks up the Stripe secrets by name and does not write their values. It does not replace the GraphQL API, `ShopApiKey20261112`, the Dynamo tables, the queues, or the buckets.
 
 ```bash
 npx cdk deploy mtgstore-PaymentsStack -c notifyEmail=you@example.com --require-approval broadening
 ```
 
-The secrets are created as `REPLACE_ME`. Until they are replaced, and until the web build has a real publishable key and the checkout URL, the checkout step says "Online payment coming soon" and the pay button stays off. The address check still runs. The Lambdas answer `payments not configured` instead of crashing.
+The first deploy created `mtgstore/stripe/secret-key` and `mtgstore/stripe/webhook-secret` with `DeletionPolicy: Retain`. Later deploys only reference those names. CloudFormation does not reset the stored values. Until the secret key is a real `sk_test_...` value, and until the web build has a real publishable key and the checkout URL, the checkout step says "Online payment coming soon" and the pay button stays off. The address check still runs. The Lambdas answer `payments not configured` instead of crashing.
 
-Replace the keys in the console. Do not change the `REPLACE_ME` strings in the CDK template, or the next deploy writes the placeholder back over the real values.
+Set or replace the keys in the console. A deploy will not overwrite them.
 
 ```bash
 aws secretsmanager put-secret-value \
