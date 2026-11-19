@@ -1,11 +1,11 @@
 /** Shell colour is fixed by where the art came from. */
-export type ArtSource = 'example' | 'upload' | 'scryfall';
+export type ArtSource = 'example' | 'dragon' | 'upload' | 'scryfall';
 
 export const BOX_BLACK_ID = 'elegoo-pla-black';
 export const BOX_PINK_ID = 'elegoo-matte-pla-sakura-pink';
 
 export function artSourceOf(value: string | null | undefined): ArtSource {
-  if (value === 'example' || value === 'scryfall' || value === 'upload') return value;
+  if (value === 'example' || value === 'dragon' || value === 'scryfall' || value === 'upload') return value;
   return 'upload';
 }
 

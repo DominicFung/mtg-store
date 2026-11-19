@@ -11,6 +11,7 @@ describe('lid colours', () => {
     expect(boxFilamentForSource('example')).toBe('elegoo-matte-pla-sakura-pink');
     expect(boxFilamentForSource('upload')).toBe('elegoo-pla-black');
     expect(boxFilamentForSource('scryfall')).toBe('elegoo-pla-black');
+    expect(boxFilamentForSource('dragon')).toBe('elegoo-pla-black');
   });
 
   it('offers white, beige, and a red logo with a white name', () => {

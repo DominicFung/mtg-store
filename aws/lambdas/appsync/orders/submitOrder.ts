@@ -100,6 +100,7 @@ export const handler = async (event: AppSyncResolverEvent<{ input: unknown }>) =
     profileSnapshot: resolved,
     stops,
     lid,
+    artSource: input.artSource,
     history,
     generationAttempt: 0,
     crops: input.crops,

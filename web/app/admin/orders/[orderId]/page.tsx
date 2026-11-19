@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import FacePreviews from '../../../components/facePreviews';
+import StatusTimeline from '../../../components/statusTimeline';
 import LidSummary from '../../../components/lidSummary';
 import AdminSignInCard from '../../signInCard';
 import {
@@ -13,6 +14,7 @@ import {
   advanceShopOrder,
   loadOrder,
   refreshShopDownload,
+  saveDownload,
   undoShopOrder,
   uploadDeliveryPhoto,
   type ShopOrder,
@@ -61,8 +63,6 @@ export default function AdminOrderPage() {
         return;
       }
       setOrder(found);
-      const url = await refreshShopDownload(orderId);
-      if (!cancelled && url) setDownloadUrl(url);
     }).catch((caught: unknown) => {
       if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load the order');
     });
@@ -117,18 +117,19 @@ export default function AdminOrderPage() {
     }
   };
 
-  const download = async () => {
+  const download = async (which: 'faces' | 'all') => {
     if (!orderId) return;
     setBusy(true);
     setError('');
     try {
-      const url = await refreshShopDownload(orderId);
+      const links = await refreshShopDownload(orderId);
+      const url = which === 'faces' ? links.faces : links.all;
       if (!url) {
         setError('Print files are not ready yet. They stay in the private bucket once the generator finishes.');
         return;
       }
       setDownloadUrl(url);
-      window.location.assign(url);
+      saveDownload(url, which === 'faces' ? 'deck-box-faces.zip' : 'deck-box.zip');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create a download link');
     } finally {
@@ -161,6 +162,7 @@ export default function AdminOrderPage() {
             <h1 className="font-mono text-2xl text-[#e2c275]">{order.orderNumber}</h1>
             <p>{order.name} · {order.email}</p>
             <p>{fulfillmentLabel(order.status, order.paymentStatus)} · {order.paymentStatus === 'PAID' ? 'Paid' : 'Not paid'}</p>
+            <StatusTimeline status={order.status} paymentStatus={order.paymentStatus} createdAt={order.createdAt} history={order.history} />
             <div className="flex flex-wrap gap-2">
               {order.status === 'SHIPPED' && !photoPreview && (
                 <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-[#e2c275] px-3 text-sm font-semibold text-black">
@@ -217,9 +219,15 @@ export default function AdminOrderPage() {
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
                 {PRINT_FILES.filter((name) => name !== 'lid-text.stl (when the lid has a name)' || order.lid?.text).map((name) => <li key={name}>{name}</li>)}
               </ul>
-              <button type="button" onClick={() => { void download(); }} disabled={busy} className="mt-3 min-h-11 rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:opacity-50">
-                {busy ? 'Preparing download…' : 'Download'}
-              </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => { void download('faces'); }} disabled={busy} className="min-h-11 rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:opacity-50">
+                  {busy ? 'Preparing download…' : 'Download'}
+                </button>
+                <button type="button" onClick={() => { void download('all'); }} disabled={busy} className="min-h-11 rounded-md border border-[#e2c275] px-4 text-sm font-semibold text-[#e2c275] disabled:opacity-50">
+                  Download all
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-400">Download is the three face plates. Download all is the whole print bundle.</p>
               {downloadUrl && <p className="mt-2 break-all text-xs text-gray-400">A fresh link is ready. It is not emailed and customers cannot request one.</p>}
             </section>
           </article>

@@ -187,7 +187,7 @@ export type PlaceOrderInput = {
   crops: [string, string, string];
   previews: [string, string, string];
   lid?: LidChoice;
-  artSource?: 'example' | 'upload' | 'scryfall';
+  artSource?: 'example' | 'dragon' | 'upload' | 'scryfall';
 };
 
 function stopsFrom(layers: Filament[], endLayers: number[], profile: ResolvedProfile): ShopStop[] {
@@ -479,14 +479,28 @@ export async function uploadDeliveryPhoto(orderId: string, bytes: Blob, contentT
   );
 }
 
-export async function refreshShopDownload(orderId: string): Promise<string | undefined> {
-  if (!(shopConfigured() && adminToken())) return undefined;
-  const detail = await gql<{ refreshDownloadLinks: { downloadUrl?: string } }>(
-    `mutation Refresh($orderId: ID!) { refreshDownloadLinks(orderId: $orderId) { downloadUrl } }`,
+export async function refreshShopDownload(orderId: string): Promise<{ faces?: string; all?: string }> {
+  if (!(shopConfigured() && adminToken())) return {};
+  const detail = await gql<{ refreshDownloadLinks: { downloadUrl?: string; facesDownloadUrl?: string } }>(
+    `mutation Refresh($orderId: ID!) { refreshDownloadLinks(orderId: $orderId) { downloadUrl facesDownloadUrl } }`,
     { orderId },
     'admin',
   );
-  return detail.refreshDownloadLinks.downloadUrl ?? undefined;
+  return {
+    all: detail.refreshDownloadLinks.downloadUrl ?? undefined,
+    faces: detail.refreshDownloadLinks.facesDownloadUrl ?? undefined,
+  };
+}
+
+/** A real click on an anchor still downloads after the presign await. A popup does not. */
+export function saveDownload(url: string, filename: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 export function readProfiles(): ResolvedProfile[] {

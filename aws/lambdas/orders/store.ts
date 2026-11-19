@@ -7,7 +7,16 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  UploadPartCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
@@ -135,11 +144,87 @@ export async function presignPut(key: string, byteLength: number, contentType = 
   };
 }
 
-export async function presignGet(key: string, expiresIn = Number(process.env.PRESIGN_TTL_SECONDS ?? 4 * 60 * 60)): Promise<string> {
+export async function presignGet(key: string, expiresIn = Number(process.env.PRESIGN_TTL_SECONDS ?? 4 * 60 * 60), filename?: string): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: requiredEnv('ORDER_BUCKET_NAME'),
     Key: key,
+    ResponseContentDisposition: filename ? `attachment; filename="${filename.replace(/"/g, '')}"` : undefined,
   }), { expiresIn });
+}
+
+export async function objectSize(key: string): Promise<number> {
+  const head = await s3.send(new HeadObjectCommand({ Bucket: requiredEnv('ORDER_BUCKET_NAME'), Key: key }));
+  return Number(head.ContentLength ?? 0);
+}
+
+export async function readObjectRange(key: string, start: number, end: number): Promise<Buffer> {
+  const result = await s3.send(new GetObjectCommand({
+    Bucket: requiredEnv('ORDER_BUCKET_NAME'),
+    Key: key,
+    Range: `bytes=${start}-${end}`,
+  }));
+  const bytes = await result.Body?.transformToByteArray();
+  if (!bytes) throw new Error('Empty object range');
+  return Buffer.from(bytes);
+}
+
+/** Put a generated zip. Small results go in one request. Larger ones stream in parts. */
+export async function uploadChunks(key: string, produce: (sink: (chunk: Buffer) => Promise<void>) => Promise<void>): Promise<void> {
+  const bucket = requiredEnv('ORDER_BUCKET_NAME');
+  const pending: Buffer[] = [];
+  let pendingBytes = 0;
+  let uploadId: string | undefined;
+  const parts: { ETag: string; PartNumber: number }[] = [];
+  let partNumber = 1;
+  const flush = async (force: boolean) => {
+    if (!pendingBytes) return;
+    if (!force && pendingBytes < 6 * 1024 * 1024) return;
+    const body = Buffer.concat(pending);
+    pending.length = 0;
+    pendingBytes = 0;
+    if (!uploadId && !force) {
+      const created = await s3.send(new CreateMultipartUploadCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: 'application/zip',
+      }));
+      uploadId = created.UploadId;
+    }
+    if (!uploadId) {
+      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: 'application/zip' }));
+      return;
+    }
+    const uploaded = await s3.send(new UploadPartCommand({
+      Bucket: bucket,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: partNumber,
+      Body: body,
+    }));
+    parts.push({ ETag: uploaded.ETag ?? '', PartNumber: partNumber });
+    partNumber += 1;
+  };
+  try {
+    await produce(async (chunk) => {
+      pending.push(chunk);
+      pendingBytes += chunk.length;
+      await flush(false);
+    });
+    await flush(true);
+    if (uploadId) {
+      await s3.send(new CompleteMultipartUploadCommand({
+        Bucket: bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: { Parts: parts },
+      }));
+    }
+  } catch (error) {
+    if (uploadId) {
+      await s3.send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId: uploadId })).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 export async function objectExists(key: string): Promise<boolean> {

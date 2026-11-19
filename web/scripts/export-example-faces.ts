@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { PNG } from 'pngjs';
 import { colorCoreLayerCount } from '../app/lib/colourCore';
-import { exampleEndLayers, exampleLayers } from '../app/lib/exampleDesign';
+import { dragonEndLayers, dragonLayers, exampleEndLayers, exampleLayers } from '../app/lib/exampleDesign';
 import { MOCK_FILAMENTS } from '../app/lib/filamentCatalogue';
 import { toCoreStops } from '../app/lib/renderLayers';
 import { buildFaceMesh, LAUNCH_PROFILES, profileToSettings } from '../app/lib/printGeometry';
@@ -21,7 +21,11 @@ function arg(name: string, fallback: string): string {
 
 const outDir = resolve(arg('--out', '/tmp/example-relief'));
 const maxDepth = Number(arg('--max-depth', '2'));
-const imageDir = resolve(arg('--images', new URL('../public/examples/winter-dogs/', import.meta.url).pathname));
+const example = arg('--example', 'pink-doggo');
+const imageDir = resolve(arg('--images', new URL(
+  example === 'red-dragon' ? '../public/examples/red-dragon/' : '../public/examples/winter-dogs/',
+  import.meta.url,
+).pathname));
 mkdirSync(outDir, { recursive: true });
 
 const settings = {
@@ -30,8 +34,11 @@ const settings = {
   maxDepth,
   brightnessAdjust: 0,
 };
-const layers = exampleLayers(MOCK_FILAMENTS);
-const stops = toCoreStops(layers, exampleEndLayers(colorCoreLayerCount(settings)));
+const layers = example === 'red-dragon' ? dragonLayers(MOCK_FILAMENTS) : exampleLayers(MOCK_FILAMENTS);
+const stops = toCoreStops(
+  layers,
+  example === 'red-dragon' ? dragonEndLayers(colorCoreLayerCount(settings)) : exampleEndLayers(colorCoreLayerCount(settings)),
+);
 const report = [];
 
 for (const face of FACES) {

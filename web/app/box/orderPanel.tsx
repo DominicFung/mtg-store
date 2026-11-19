@@ -20,7 +20,7 @@ type Props = {
   onProfile: (id: string) => void;
   faceSizes: Array<{ widthMm: number; heightMm: number } | null>;
   lid: LidChoice | null;
-  artSource: 'example' | 'upload' | 'scryfall';
+  artSource: 'example' | 'dragon' | 'upload' | 'scryfall';
 };
 
 const FACES = ['Right', 'Spine', 'Left'];

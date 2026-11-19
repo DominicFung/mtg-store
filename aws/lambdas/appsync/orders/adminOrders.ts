@@ -10,6 +10,7 @@ import {
   newestOrders,
   nextFulfillment,
   ORDER_STATUSES,
+  orderObjectKeys,
   previousFulfillment,
   type OrderStatus,
 } from '../../orders/logic';
@@ -19,10 +20,16 @@ import {
   getOrder,
   emailCustomer,
   notifyCustomer,
+  objectExists,
+  objectSize,
+  presignGet,
   presignPut,
+  readObjectRange,
   requiredEnv,
   updateOrder,
+  uploadChunks,
 } from '../../orders/store';
+import { streamFacesZip } from '../../orders/facesZip';
 import { summary, withImages, type OrderItem } from '../../orders/view';
 
 type Args = {
@@ -51,7 +58,7 @@ export const handler = async (event: AppSyncResolverEvent<Args>) => {
   const field = event.info?.fieldName;
   if (field === 'listOrders') return listOrders(event.arguments ?? {});
   if (field === 'getAdminOrder') return withImages(asOrder(await getOrder(event.arguments?.orderId ?? '')), true);
-  if (field === 'refreshDownloadLinks') return withImages(asOrder(await getOrder(event.arguments?.orderId ?? '')), true);
+  if (field === 'refreshDownloadLinks') return refreshDownloads(event.arguments?.orderId ?? '');
   if (field === 'updateOrderStatus') return updateStatus(event.arguments ?? {});
   if (field === 'retryOrderGeneration') return retry(event.arguments?.orderId ?? '');
   if (field === 'advanceOrder') return moveFulfillment(event.arguments?.orderId ?? '', 'next');
@@ -102,6 +109,25 @@ async function listOrders(args: Args) {
     .filter((item) => typeof item.orderId === 'string' && !String(item.orderId).startsWith('lock#'))
     .filter((item) => !status || item.status === status)
     .map((item) => summary(item as OrderItem));
+}
+
+async function refreshDownloads(orderId: string) {
+  const order = asOrder(await getOrder(orderId));
+  const keys = orderObjectKeys(order.orderId);
+  if (order.outputKey && !(await objectExists(keys.facesZip))) {
+    const size = await objectSize(order.outputKey);
+    await uploadChunks(keys.facesZip, (sink) => streamFacesZip(
+      (start, end) => readObjectRange(order.outputKey as string, start, end),
+      size,
+      sink,
+    ));
+  }
+  const detail = await withImages({ ...order, outputKey: order.outputKey }, true);
+  return {
+    ...detail,
+    downloadUrl: order.outputKey ? await presignGet(order.outputKey, undefined, 'deck-box.zip') : null,
+    facesDownloadUrl: order.outputKey ? await presignGet(keys.facesZip, undefined, 'deck-box-faces.zip') : null,
+  };
 }
 
 async function updateStatus(args: Args) {
