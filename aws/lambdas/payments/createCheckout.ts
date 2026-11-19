@@ -33,6 +33,7 @@ export async function createCheckoutSession(secret: string, input: {
   params.set('success_url', input.successUrl);
   params.set('cancel_url', input.cancelUrl);
   params.set('customer_email', input.email);
+  params.set('payment_intent_data[receipt_email]', input.email);
   params.set('client_reference_id', input.orderNumber);
   params.set('metadata[orderNumber]', input.orderNumber);
   params.set('metadata[email]', input.email);

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import {
   adminConfigured,
@@ -7,8 +8,10 @@ import {
   adminSignOut,
   adminToken,
   deactivateProfile,
+  advanceShopOrder,
   listShopOrders,
   loadOrder,
+  undoShopOrder,
   readProfiles,
   refreshShopDownload,
   retryShopOrder,
@@ -21,7 +24,62 @@ import { LAUNCH_PROFILES, resolveProfile, type NozzleProfile, type ResolvedProfi
 import { missingShopConfig } from '../lib/publicConfig';
 import LidSummary from '../components/lidSummary';
 
-const STATUSES = ['', 'RECEIVED', 'GENERATING_FILES', 'READY_TO_PRINT', 'PRINTING', 'SHIPPED', 'DELIVERED', 'FAILED', 'CANCELLED'];
+const STATUSES = ['', 'RECEIVED', 'GENERATING_FILES', 'READY_TO_PRINT', 'PRINTING', 'READY_TO_SHIP', 'SHIPPED', 'DELIVERED', 'FAILED', 'CANCELLED'];
+
+function fulfillmentLabel(status: string, _paymentStatus: string): string {
+  if (status === 'PRINTING') return 'Printing';
+  if (status === 'READY_TO_SHIP') return 'Ready to ship';
+  if (status === 'SHIPPED') return 'Out for delivery';
+  if (status === 'DELIVERED') return 'Delivered';
+  if (status === 'CANCELLED') return 'Cancelled';
+  if (status === 'FAILED') return 'Needs attention';
+  return 'Received';
+}
+
+function advanceLabel(status: string): string | null {
+  if (status === 'RECEIVED' || status === 'GENERATING_FILES' || status === 'READY_TO_PRINT' || status === 'FAILED') return "I've started printing";
+  if (status === 'PRINTING') return 'Ready to ship';
+  if (status === 'READY_TO_SHIP') return 'Out for delivery';
+  if (status === 'SHIPPED') return 'Delivered';
+  return null;
+}
+
+function OrderMoves({
+  order,
+  pending,
+  onAsk,
+  onDone,
+}: {
+  order: ShopOrder;
+  pending: { id: string; direction: 'next' | 'previous' } | null;
+  onAsk: (next: { id: string; direction: 'next' | 'previous' } | null) => void;
+  onDone: () => void;
+}) {
+  const next = advanceLabel(order.status);
+  const asked = pending?.id === order.orderId ? pending.direction : null;
+  const run = async (direction: 'next' | 'previous') => {
+    if (direction === 'next' && order.status === 'SHIPPED') return;
+    if (direction === 'next') await advanceShopOrder(order.orderId);
+    else await undoShopOrder(order.orderId);
+    onDone();
+  };
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {order.status === 'SHIPPED' ? (
+        <Link href={`/admin/orders/${order.orderId}`} className="inline-flex min-h-11 items-center rounded-md bg-[#e2c275] px-3 text-sm font-semibold text-black">Add door photo</Link>
+      ) : next && asked !== 'next' && (
+        <button type="button" className="min-h-11 rounded-md bg-[#e2c275] px-3 text-sm font-semibold text-black" onClick={() => onAsk({ id: order.orderId, direction: 'next' })}>{next}</button>
+      )}
+      {asked === 'next' && (
+        <button type="button" className="min-h-11 rounded-md bg-[#e2c275] px-3 text-sm font-semibold text-black" onClick={() => { void run('next'); }}>Confirm</button>
+      )}
+      {asked && <button type="button" className="min-h-11 rounded-md border border-white/20 px-3 text-sm" onClick={() => onAsk(null)}>Cancel</button>}
+      {order.status !== 'RECEIVED' && order.status !== 'GENERATING_FILES' && order.status !== 'CANCELLED' && (
+        <button type="button" className="min-h-11 rounded-md border border-white/20 px-3 text-sm" onClick={() => { void run('previous'); }}>Undo</button>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const [signedIn, setSignedIn] = useState(false);
@@ -35,6 +93,7 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<ShopOrder | null>(null);
   const [profiles, setProfiles] = useState<ResolvedProfile[]>(LAUNCH_PROFILES.map(resolveProfile));
   const [message, setMessage] = useState('');
+  const [pending, setPending] = useState<{ id: string; direction: 'next' | 'previous' } | null>(null);
 
   const refresh = async (nextStatus = status, nextEmail = filterEmail) => {
     const rows = await listShopOrders({ status: nextStatus, email: nextEmail });
@@ -112,29 +171,23 @@ export default function AdminPage() {
             <input id="filter-email" value={filterEmail} onChange={(event) => setFilterEmail(event.target.value)} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-[#1a1a2e] px-3 sm:w-64" />
           </label>
         </div>
-        <ul className="mt-4 space-y-2 md:hidden">
+        <ul className="mt-4 space-y-2">
           {orders.map((order) => (
-            <li key={order.orderId}>
-              <button type="button" onClick={() => { void openOrder(order.orderId); }} className="w-full rounded-lg border border-white/10 p-3 text-left">
+            <li key={order.orderId} className="rounded-lg border border-white/10 p-3">
+              <Link href={`/admin/orders/${order.orderId}`} className="block">
                 <span className="font-mono text-[#e2c275]">{order.orderNumber}</span>
-                <span className="mt-1 block text-sm">{order.name} · {order.status}</span>
-              </button>
+                <span className="mt-1 block text-sm">{order.name}</span>
+                <span className="mt-1 block text-xs text-gray-400">{order.createdAt.slice(0, 10)} · {order.paymentStatus === 'PAID' ? 'Paid' : 'Not paid'} · {fulfillmentLabel(order.status, order.paymentStatus)}</span>
+              </Link>
+              <OrderMoves
+                order={order}
+                pending={pending}
+                onAsk={setPending}
+                onDone={() => { setPending(null); void refresh(); }}
+              />
             </li>
           ))}
         </ul>
-        <table className="mt-4 hidden w-full text-left text-sm md:table">
-          <thead className="text-gray-400"><tr><th className="py-2">Order</th><th>Customer</th><th>Status</th><th>Nozzle</th></tr></thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order.orderId} className="border-t border-white/10">
-                <td className="py-2 font-mono"><button type="button" className="text-[#e2c275]" onClick={() => { void openOrder(order.orderId); }}>{order.orderNumber}</button></td>
-                <td>{order.name}<span className="block text-xs text-gray-400">{order.email}</span></td>
-                <td>{order.status}</td>
-                <td>{order.profileName}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
         {selected && (
           <section className="mt-6 rounded-xl border border-white/10 p-4">
             <h2 className="text-lg text-[#e2c275]">{selected.orderNumber}</h2>
@@ -148,7 +201,7 @@ export default function AdminPage() {
             )}
             {selected.previews?.some(Boolean) && (
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {selected.previews.map((src, index) => src ? <img key={index} src={src} alt="" className="w-full rounded" /> : null)}
+                {selected.previews.map((src, index) => src ? <img key={index} src={src} alt="" className="aspect-[4/5] w-full rounded bg-black/40 object-cover" /> : null)}
               </div>
             )}
             <div className="mt-3 flex flex-wrap gap-2">

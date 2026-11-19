@@ -1,6 +1,7 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { PAYMENT_STATUS_PAID } from '../../../packages/print-core/src/orderNumber';
 import { isStripeWebhookConfigured, PAYMENTS_NOT_CONFIGURED, verifyStripeSignature } from '../../../packages/print-core/src/stripeConfig';
+import { deliverPaidMail } from '../orders/paidNotice';
 import { findByOrderNumber, updateOrder } from '../orders/store';
 import { json, rawBody } from './http';
 import { readSecret } from './secrets';
@@ -46,6 +47,7 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       updatedAt: now,
       history,
     });
+    await deliverPaidMail(String(order.orderId));
     return json(200, { ok: true, paid: true });
   } catch (error) {
     console.error('payment notice failed', error instanceof Error ? error.name : 'error');

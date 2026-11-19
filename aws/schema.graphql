@@ -186,6 +186,13 @@ type OrderDetail {
   downloadUrl: String
   downloadExpiresAt: String
   profileSnapshotJson: String
+  deliveryPhotoUrl: String
+}
+
+type DeliveryPhotoUpload {
+  key: String!
+  url: String!
+  headersJson: String!
 }
 
 type PresignedUpload {
@@ -246,6 +253,8 @@ input SubmitOrderInput {
   previews: [UploadSlotInput!]!
   # Optional so an older client can still submit. The designer always sends it.
   lid: OrderLidInput
+  # "example", "upload", or "scryfall". Missing means upload, which locks the shell to black.
+  artSource: String
 }
 
 type OutpaintResult {
@@ -284,6 +293,10 @@ type Mutation {
   updateOrderStatus(orderId: ID!, nextStatus: String!, carrier: String, trackingNumber: String, note: String): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
   retryOrderGeneration(orderId: ID!): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
   refreshDownloadLinks(orderId: ID!): OrderDetail! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  advanceOrder(orderId: ID!): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  undoOrder(orderId: ID!): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  requestDeliveryPhotoUpload(orderId: ID!, contentType: String!, byteLength: Int!): DeliveryPhotoUpload! @aws_cognito_user_pools(cognito_groups: ["admin"])
+  confirmDelivery(orderId: ID!, key: String!): OrderSummary! @aws_cognito_user_pools(cognito_groups: ["admin"])
   upsertNozzleProfile(input: UpsertNozzleProfileInput!): NozzleProfile! @aws_cognito_user_pools(cognito_groups: ["admin"])
   deactivateNozzleProfile(id: ID!): NozzleProfile! @aws_cognito_user_pools(cognito_groups: ["admin"])
 }

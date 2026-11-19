@@ -53,6 +53,8 @@ export type ShopOrder = {
   errorMessage?: string;
   carrier?: string;
   trackingNumber?: string;
+  profileSnapshotJson?: string;
+  deliveryPhotoUrl?: string;
   downloadUrl?: string;
   lid?: ShopLid | null;
 };
@@ -108,6 +110,15 @@ export function shopConfigured(): boolean {
 
 export function adminConfigured(): boolean {
   return Boolean(publicConfig.cognitoClientId && publicConfig.cognitoUserPoolId);
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Could not read the photo'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function readOrders(): ShopOrder[] {
@@ -176,6 +187,7 @@ export type PlaceOrderInput = {
   crops: [string, string, string];
   previews: [string, string, string];
   lid?: LidChoice;
+  artSource?: 'example' | 'upload' | 'scryfall';
 };
 
 function stopsFrom(layers: Filament[], endLayers: number[], profile: ResolvedProfile): ShopStop[] {
@@ -277,7 +289,7 @@ export async function trackOrder(orderNumber: string, email: string): Promise<Sh
         trackOrder(orderNumber: $orderNumber, email: $email) {
           orderId orderNumber email name status createdAt updatedAt priceLabel paymentStatus
           profileName nozzleSize layerCount errorMessage carrier trackingNumber note
-          addressLine1 city region postalCode country previewUrls
+          addressLine1 city region postalCode country previewUrls deliveryPhotoUrl
           history { status at actor note }
           stops { filamentId name hex td type brand endLayer depthMm }
           lid { boxFilamentId boxFilamentName boxHex logoFilamentId logoFilamentName logoHex text textFilamentId textFilamentName textHex }
@@ -313,7 +325,7 @@ export async function listShopOrders(filter: { status?: string; email?: string }
     if (filter.status && order.status !== filter.status) return false;
     if (filter.email && !order.email.includes(filter.email.trim().toLowerCase())) return false;
     return true;
-  });
+  }).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 export async function loadOrder(orderId: string): Promise<ShopOrder | null> {
@@ -323,7 +335,7 @@ export async function loadOrder(orderId: string): Promise<ShopOrder | null> {
         getAdminOrder(orderId: $orderId) {
           orderId orderNumber email name status createdAt updatedAt priceLabel paymentStatus
           profileName nozzleSize layerCount errorMessage carrier trackingNumber note
-          addressLine1 city region postalCode country previewUrls downloadUrl
+          addressLine1 city region postalCode country previewUrls downloadUrl profileSnapshotJson deliveryPhotoUrl
           history { status at actor note }
           stops { filamentId name hex td type brand endLayer depthMm }
           lid { boxFilamentId boxFilamentName boxHex logoFilamentId logoFilamentName logoHex text textFilamentId textFilamentName textHex }
@@ -375,6 +387,96 @@ export async function retryShopOrder(orderId: string): Promise<void> {
     return;
   }
   await updateShopStatus(orderId, 'GENERATING_FILES', { note: 'Retry generation' });
+}
+
+const NEXT_STATUS: Record<string, string> = {
+  RECEIVED: 'PRINTING',
+  GENERATING_FILES: 'PRINTING',
+  READY_TO_PRINT: 'PRINTING',
+  FAILED: 'PRINTING',
+  PRINTING: 'READY_TO_SHIP',
+  READY_TO_SHIP: 'SHIPPED',
+  SHIPPED: 'DELIVERED',
+};
+const PREVIOUS_STATUS: Record<string, string> = {
+  PRINTING: 'READY_TO_PRINT',
+  READY_TO_SHIP: 'PRINTING',
+  SHIPPED: 'READY_TO_SHIP',
+  DELIVERED: 'SHIPPED',
+};
+
+function moveLocal(orderId: string, direction: 'next' | 'previous') {
+  const orders = readOrders();
+  const now = new Date().toISOString();
+  writeOrders(orders.map((order) => {
+    if (order.orderId !== orderId) return order;
+    const next = direction === 'next' ? NEXT_STATUS[order.status] : PREVIOUS_STATUS[order.status];
+    if (!next || next === 'DELIVERED') return order;
+    return {
+      ...order,
+      status: next,
+      updatedAt: now,
+      history: [...(order.history ?? []), { status: next, at: now, actor: 'admin', note: direction === 'next' ? 'Status advanced' : 'Status undone' }],
+    };
+  }));
+}
+
+export async function advanceShopOrder(orderId: string): Promise<void> {
+  if (shopConfigured() && adminToken()) {
+    await gql(
+      `mutation Advance($orderId: ID!) { advanceOrder(orderId: $orderId) { orderId status } }`,
+      { orderId },
+      'admin',
+    );
+    return;
+  }
+  moveLocal(orderId, 'next');
+}
+
+export async function undoShopOrder(orderId: string): Promise<void> {
+  if (shopConfigured() && adminToken()) {
+    await gql(
+      `mutation Undo($orderId: ID!) { undoOrder(orderId: $orderId) { orderId status } }`,
+      { orderId },
+      'admin',
+    );
+    return;
+  }
+  moveLocal(orderId, 'previous');
+}
+
+export async function uploadDeliveryPhoto(orderId: string, bytes: Blob, contentType: string): Promise<void> {
+  if (!(shopConfigured() && adminToken())) {
+    const url = await blobToDataUrl(bytes);
+    const now = new Date().toISOString();
+    writeOrders(readOrders().map((order) => order.orderId === orderId ? {
+      ...order,
+      status: 'DELIVERED',
+      updatedAt: now,
+      deliveryPhotoUrl: url,
+      history: [...(order.history ?? []), { status: 'DELIVERED', at: now, actor: 'admin', note: 'Delivered with a door photo' }],
+    } : order));
+    return;
+  }
+  const requested = await gql<{ requestDeliveryPhotoUpload: { key: string; url: string; headersJson: string } }>(
+    `mutation Photo($orderId: ID!, $contentType: String!, $byteLength: Int!) {
+      requestDeliveryPhotoUpload(orderId: $orderId, contentType: $contentType, byteLength: $byteLength) { key url headersJson }
+    }`,
+    { orderId, contentType, byteLength: bytes.size },
+    'admin',
+  );
+  const upload = requested.requestDeliveryPhotoUpload;
+  const response = await fetch(upload.url, {
+    method: 'PUT',
+    headers: JSON.parse(upload.headersJson) as Record<string, string>,
+    body: bytes,
+  });
+  if (!response.ok) throw new Error('The photo upload failed');
+  await gql(
+    `mutation Deliver($orderId: ID!, $key: String!) { confirmDelivery(orderId: $orderId, key: $key) { orderId status } }`,
+    { orderId, key: upload.key },
+    'admin',
+  );
 }
 
 export async function refreshShopDownload(orderId: string): Promise<string | undefined> {
@@ -515,11 +617,12 @@ async function placeRemote(input: PlaceOrderInput): Promise<ShopOrder> {
         })),
         crops: crops.map(({ width, height, byteLength }) => ({ width, height, byteLength })),
         previews: previews.map(({ width, height, byteLength }) => ({ width, height, byteLength })),
+        artSource: input.artSource ?? 'upload',
         lid: input.lid ? {
           boxFilamentId: input.lid.box.id,
           logoFilamentId: input.lid.logo.id,
           text: normalizeLidText(input.lid.text) || null,
-          textFilamentId: normalizeLidText(input.lid.text) ? input.lid.textFilament.id : null,
+          textFilamentId: input.lid.textFilament.id,
         } : null,
       },
     },

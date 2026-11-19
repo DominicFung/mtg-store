@@ -53,7 +53,7 @@ test('the example lid defaults to sakura pink and the closest catalogue white', 
   assert.equal(white.name, 'Deeplee Matte White');
   assert.equal(DEFAULT_BOX_FILAMENT_ID, 'elegoo-pla-black');
   assert.equal(DEFAULT_LOGO_FILAMENT_ID, 'elegoo-pla-red');
-  assert.equal(DEFAULT_TEXT_FILAMENT_ID, 'giantarm-silk-silver');
+  assert.equal(DEFAULT_TEXT_FILAMENT_ID, 'deeplee-matte-white');
 });
 
 test('the filament seed contains Deeplee Matte White and every other catalogue row', () => {

@@ -31,8 +31,12 @@ const ordersStack = new OrdersStack(app, `${PROJECT_NAME}-OrdersStack`, {
 })
 ordersStack.addDependency(dynamoStack)
 
-const paymentsStack = new PaymentsStack(app, `${PROJECT_NAME}-PaymentsStack`, { name: PROJECT_NAME })
+const paymentsStack = new PaymentsStack(app, `${PROJECT_NAME}-PaymentsStack`, {
+  name: PROJECT_NAME,
+  notifyEmail,
+})
 paymentsStack.addDependency(dynamoStack)
+paymentsStack.addDependency(ordersStack)
 
 const appsyncStack = new AppsyncStack(app, `${PROJECT_NAME}-AppsyncStack`, {
   name: PROJECT_NAME,

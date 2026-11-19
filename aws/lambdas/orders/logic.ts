@@ -1,5 +1,6 @@
 import { colorCoreLayerCount, layerTopMm } from '../../../packages/print-core/src/colourCore';
 import { isBoxFilament } from '../../../packages/print-core/src/boxColours';
+import { artSourceOf, boxFilamentForSource, lidMarkForFilaments, type ArtSource } from '../../../packages/print-core/src/lidMarks';
 import { normalizeLidText } from '../../../packages/print-core/src/lidText';
 import { isOrderNumber, newOrderNumber, PAYMENT_STATUS, PRICE_LABEL } from '../../../packages/print-core/src/orderNumber';
 import {
@@ -14,6 +15,7 @@ export const ORDER_STATUSES = [
   'GENERATING_FILES',
   'READY_TO_PRINT',
   'PRINTING',
+  'READY_TO_SHIP',
   'SHIPPED',
   'DELIVERED',
   'FAILED',
@@ -32,15 +34,18 @@ export const MAX_STOPS = 16;
 export const ORDERS_PER_HOUR = 5;
 export const ORDERS_PER_DAY = 20;
 export const PRESIGN_TTL_SECONDS = 4 * 60 * 60;
+/** Asked length of the print-file link. Lambda credentials may cap it shorter. */
+export const PRINT_LINK_SECONDS = 7 * 24 * 60 * 60;
 
 const ADMIN_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  RECEIVED: ['CANCELLED'],
-  GENERATING_FILES: ['CANCELLED'],
+  RECEIVED: ['PRINTING', 'CANCELLED'],
+  GENERATING_FILES: ['PRINTING', 'CANCELLED'],
   READY_TO_PRINT: ['PRINTING', 'CANCELLED'],
-  PRINTING: ['READY_TO_PRINT', 'SHIPPED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED', 'PRINTING'],
-  DELIVERED: [],
-  FAILED: ['CANCELLED'],
+  PRINTING: ['READY_TO_SHIP', 'READY_TO_PRINT', 'CANCELLED'],
+  READY_TO_SHIP: ['SHIPPED', 'PRINTING', 'CANCELLED'],
+  SHIPPED: ['DELIVERED', 'READY_TO_SHIP'],
+  DELIVERED: ['SHIPPED'],
+  FAILED: ['PRINTING', 'CANCELLED'],
   CANCELLED: [],
 };
 
@@ -100,6 +105,7 @@ export type SubmitInput = {
   crops: UploadSlotInput[];
   previews: UploadSlotInput[];
   lid?: LidInput;
+  artSource: ArtSource;
 };
 
 export type CatalogueFilament = {
@@ -239,22 +245,33 @@ export function parseSubmitInput(raw: unknown): SubmitInput {
     stops,
     crops: cropsRaw.map((slot, index) => assertSlot(slot, `Face ${index + 1}`)),
     previews: previewsRaw.map((slot, index) => assertSlot(slot, `Preview ${index + 1}`)),
-    lid: parseLid(input.lid),
+    lid: parseLid(input.lid, artSourceOf(typeof input.artSource === 'string' ? input.artSource : undefined)),
+    artSource: artSourceOf(typeof input.artSource === 'string' ? input.artSource : undefined),
   };
 }
 
-function parseLid(value: unknown): LidInput | undefined {
+function parseLid(value: unknown, source: ArtSource): LidInput | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'object') throw new Error('Lid colours are invalid');
   const lid = value as Record<string, unknown>;
   const text = normalizeLidText(lid.text);
   const boxFilamentId = requiredText(lid.boxFilamentId, 'Box colour', 80);
-  if (!isBoxFilament(boxFilamentId)) throw new Error('The box is black or pink for now');
+  if (boxFilamentId !== boxFilamentForSource(source)) {
+    throw new Error(source === 'example'
+      ? 'The example box is Sakura Pink'
+      : 'Uploaded and card art print in black');
+  }
+  if (!isBoxFilament(boxFilamentId)) throw new Error('The box colour is not available');
+  const logoFilamentId = requiredText(lid.logoFilamentId, 'Logo colour', 80);
+  const textFilamentId = requiredText(lid.textFilamentId, 'Name colour', 80);
+  if (!lidMarkForFilaments(logoFilamentId, textFilamentId)) {
+    throw new Error('Choose white, beige, or a red logo with a white name');
+  }
   return {
     boxFilamentId,
-    logoFilamentId: requiredText(lid.logoFilamentId, 'Logo colour', 80),
+    logoFilamentId,
     text: text || undefined,
-    textFilamentId: text ? requiredText(lid.textFilamentId, 'Name colour', 80) : undefined,
+    textFilamentId,
   };
 }
 
@@ -286,14 +303,17 @@ export function snapshotStops(
 
 export function snapshotLid(lid: LidInput, catalogue: readonly CatalogueFilament[]): LidFinish {
   const byId = new Map(catalogue.map((filament) => [filament.id, filament]));
-  if (!isBoxFilament(lid.boxFilamentId)) throw new Error('The box is black or pink for now');
+  if (!isBoxFilament(lid.boxFilamentId)) throw new Error('The box colour is not available');
+  if (!lid.textFilamentId || !lidMarkForFilaments(lid.logoFilamentId, lid.textFilamentId)) {
+    throw new Error('Choose white, beige, or a red logo with a white name');
+  }
   const box = byId.get(lid.boxFilamentId);
   const logo = byId.get(lid.logoFilamentId);
+  const textFilament = byId.get(lid.textFilamentId);
   if (!box) throw new Error('Unknown filament for the box colour');
   if (!logo) throw new Error('Unknown filament for the Magic logo');
+  if (!textFilament) throw new Error('Unknown filament for the name on the lid');
   const text = lid.text?.trim() ? lid.text.trim() : null;
-  const textFilament = text ? byId.get(lid.textFilamentId ?? '') : undefined;
-  if (text && !textFilament) throw new Error('Unknown filament for the name on the lid');
   return {
     boxFilamentId: box.id,
     boxFilamentName: box.name,
@@ -306,6 +326,69 @@ export function snapshotLid(lid: LidInput, catalogue: readonly CatalogueFilament
     textFilamentName: textFilament?.name ?? null,
     textHex: textFilament?.hex ?? null,
   };
+}
+
+export function customerReceiptEmail(input: {
+  orderNumber: string;
+  name: string;
+  email: string;
+  priceLabel: string;
+}): { subject: string; text: string } {
+  const track = `https://themanaramp.ca/track?order=${encodeURIComponent(input.orderNumber)}&email=${encodeURIComponent(input.email)}`;
+  return {
+    subject: `The Mana Ramp receipt ${input.orderNumber}`,
+    text: [
+      'The Mana Ramp',
+      'Commander Deck Box receipt',
+      '',
+      `Hello ${input.name},`,
+      '',
+      `Order ${input.orderNumber}`,
+      `Price ${input.priceLabel} — paid`,
+      'We print the box and deliver it locally. Print files stay with the shop.',
+      '',
+      'Track this order:',
+      track,
+    ].join('\n'),
+  };
+}
+
+export function ownerPaidEmail(input: {
+  orderId: string;
+  orderNumber: string;
+  name: string;
+  email: string;
+  addressLine1?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  profileName?: string | null;
+  layerCount?: number | null;
+  stops?: Array<{ name?: string; endLayer?: number; hex?: string }>;
+  lid?: LidFinish | null;
+}): { subject: string; text: string } {
+  const address = [input.addressLine1, input.city, input.region, input.postalCode, input.country].filter(Boolean).join(', ');
+  const colours = (input.stops ?? []).map((stop) => `${stop.name ?? 'Filament'} through layer ${stop.endLayer ?? '?'}${stop.hex ? ` (${stop.hex})` : ''}`);
+  const lines = [
+    `${input.name} paid for Commander Deck Box ${input.orderNumber}.`,
+    '',
+    `Customer: ${input.name} <${input.email}>`,
+    `Address: ${address || 'not given'}`,
+    `Nozzle: ${input.profileName ?? 'not recorded'}`,
+    `Colour layers: ${input.layerCount ?? 'not recorded'}`,
+    'Colours:',
+    ...(colours.length ? colours.map((line) => `- ${line}`) : ['- none recorded']),
+  ];
+  if (input.lid) lines.push('', ...lidColourLines(input.lid));
+  lines.push(
+    '',
+    'Print files stay in the private shop bucket. Sign in to open the order, the print settings, and a fresh download:',
+    `https://themanaramp.ca/admin/orders/${input.orderId}`,
+    '',
+    'The customer does not receive print files.',
+  );
+  return { subject: `Mana Ramp ${input.orderNumber} is paid`, text: lines.join('\n') };
 }
 
 export function lidColourLines(lid: LidFinish): string[] {
@@ -374,7 +457,7 @@ export function generationDecision(order: {
 }, message: { attempt: number }): GenerationDecision {
   if (message.attempt !== order.generationAttempt) return 'skip';
   if (order.status === 'READY_TO_PRINT' && order.outputKey) return 'skip';
-  if (order.status === 'CANCELLED' || order.status === 'DELIVERED' || order.status === 'SHIPPED' || order.status === 'PRINTING') {
+  if (order.status === 'CANCELLED' || order.status === 'DELIVERED' || order.status === 'SHIPPED' || order.status === 'PRINTING' || order.status === 'READY_TO_SHIP') {
     return 'skip';
   }
   if (order.status === 'GENERATING_FILES' || order.status === 'FAILED' || order.status === 'READY_TO_PRINT') return 'run';
@@ -403,7 +486,6 @@ export function readyEmail(input: {
       ...lidColourLines(input.lid),
     );
   }
-  lines.push('Payments are not collected in the shop yet.');
   return {
     subject: `Mana Ramp ${input.orderNumber} is ready to print`,
     text: lines.join('\n'),
@@ -423,15 +505,63 @@ export function failedEmail(input: { orderNumber: string; error: string }): { su
   };
 }
 
-export function customerStatusEmail(input: { orderNumber: string; status: OrderStatus; carrier?: string; trackingNumber?: string }): { subject: string; text: string } {
+const FULFILLMENT_NEXT: Partial<Record<OrderStatus, OrderStatus>> = {
+  RECEIVED: 'PRINTING',
+  GENERATING_FILES: 'PRINTING',
+  READY_TO_PRINT: 'PRINTING',
+  FAILED: 'PRINTING',
+  PRINTING: 'READY_TO_SHIP',
+  READY_TO_SHIP: 'SHIPPED',
+  SHIPPED: 'DELIVERED',
+};
+
+const FULFILLMENT_PREVIOUS: Partial<Record<OrderStatus, OrderStatus>> = {
+  PRINTING: 'READY_TO_PRINT',
+  READY_TO_SHIP: 'PRINTING',
+  SHIPPED: 'READY_TO_SHIP',
+  DELIVERED: 'SHIPPED',
+};
+
+export function nextFulfillment(status: OrderStatus): OrderStatus | null {
+  return FULFILLMENT_NEXT[status] ?? null;
+}
+
+export function previousFulfillment(status: OrderStatus): OrderStatus | null {
+  return FULFILLMENT_PREVIOUS[status] ?? null;
+}
+
+export function fulfillmentLabel(status: string, _paymentStatus: string): string {
+  if (status === 'PRINTING') return 'Printing';
+  if (status === 'READY_TO_SHIP') return 'Ready to ship';
+  if (status === 'SHIPPED') return 'Out for delivery';
+  if (status === 'DELIVERED') return 'Delivered';
+  if (status === 'CANCELLED') return 'Cancelled';
+  if (status === 'FAILED') return 'Needs attention';
+  return 'Received';
+}
+
+export function advanceButtonLabel(status: string): string | null {
+  if (status === 'RECEIVED' || status === 'GENERATING_FILES' || status === 'READY_TO_PRINT' || status === 'FAILED') return "I've started printing";
+  if (status === 'PRINTING') return 'Ready to ship';
+  if (status === 'READY_TO_SHIP') return 'Out for delivery';
+  if (status === 'SHIPPED') return 'Delivered';
+  return null;
+}
+
+export function customerStatusEmail(input: { orderNumber: string; email?: string; status: OrderStatus; carrier?: string; trackingNumber?: string }): { subject: string; text: string } {
+  const track = input.email
+    ? `https://themanaramp.ca/track?order=${encodeURIComponent(input.orderNumber)}&email=${encodeURIComponent(input.email)}`
+    : 'https://themanaramp.ca/track';
   const lines = [
-    `Your Commander Deck Box ${input.orderNumber} is now ${input.status.replaceAll('_', ' ').toLowerCase()}.`,
+    'The Mana Ramp',
+    '',
+    `Your Commander Deck Box ${input.orderNumber} is now ${fulfillmentLabel(input.status, 'PAID').toLowerCase()}.`,
   ];
-  if (input.status === 'SHIPPED' && input.carrier && input.trackingNumber) {
-    lines.push('', `${input.carrier} tracking: ${input.trackingNumber}`);
-  }
-  lines.push('', 'Track it with this order number and the email you ordered with.');
-  return { subject: `Mana Ramp ${input.orderNumber}: ${input.status}`, text: lines.join('\n') };
+  if (input.status === 'SHIPPED') lines.push('', 'It is on the way. We deliver it in person.');
+  if (input.status === 'DELIVERED') lines.push('', 'It has been delivered. The tracking page shows the photo from your door.');
+  if (input.carrier && input.trackingNumber) lines.push('', `${input.carrier}: ${input.trackingNumber}`);
+  lines.push('', 'Track this order:', track);
+  return { subject: `Mana Ramp ${input.orderNumber}: ${fulfillmentLabel(input.status, 'PAID')}`, text: lines.join('\n') };
 }
 
 export function appendHistory(history: readonly HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
