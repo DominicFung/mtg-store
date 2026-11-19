@@ -554,28 +554,8 @@ export function adminToken(): string | null {
   return window.sessionStorage.getItem(TOKEN_KEY);
 }
 
-export async function adminSignIn(email: string, password: string): Promise<void> {
-  const clientId = publicConfig.cognitoClientId;
-  const region = publicConfig.awsRegion || 'us-east-1';
-  if (!clientId) throw new Error('Cognito is not configured in this session');
-  const response = await fetch(`https://cognito-idp.${region}.amazonaws.com/`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-amz-json-1.1',
-      'x-amz-target': 'AWSCognitoIdentityProviderService.InitiateAuth',
-    },
-    body: JSON.stringify({
-      AuthFlow: 'USER_PASSWORD_AUTH',
-      ClientId: clientId,
-      AuthParameters: { USERNAME: email, PASSWORD: password },
-    }),
-  });
-  const body = await response.json() as { message?: string; ChallengeName?: string; AuthenticationResult?: { IdToken?: string } };
-  if (!response.ok) throw new Error(body.message || 'Sign-in failed');
-  if (body.ChallengeName || !body.AuthenticationResult?.IdToken) {
-    throw new Error('Set a permanent password with the admin CLI, then sign in again.');
-  }
-  window.sessionStorage.setItem(TOKEN_KEY, body.AuthenticationResult.IdToken);
+export function saveAdminToken(token: string) {
+  window.sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export function adminSignOut() {
