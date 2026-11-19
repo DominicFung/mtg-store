@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { trackOrder, type ShopOrder } from '../lib/shopOrders';
+import FacePreviews from '../components/facePreviews';
 import LidSummary from '../components/lidSummary';
 
 export default function TrackClient() {
@@ -57,21 +58,17 @@ export default function TrackClient() {
             {order.status === 'SHIPPED' && <p>{order.carrier} {order.trackingNumber}</p>}
             {order.status === 'FAILED' && <p className="text-sm text-amber-200">{order.errorMessage || 'The shop is looking at this order.'}</p>}
             <ol className="mt-3 space-y-1 text-sm text-gray-300">
-              {order.history.map((entry, index) => (
+              {(order.history ?? []).map((entry, index) => (
                 <li key={`${entry.at}-${index}`}>{entry.at.slice(0, 16).replace('T', ' ')} · {entry.status.replaceAll('_', ' ').toLowerCase()}{entry.note ? ` · ${entry.note}` : ''}</li>
               ))}
             </ol>
             {order.status === 'DELIVERED' && order.deliveryPhotoUrl && (
-              <img src={order.deliveryPhotoUrl} alt="The box at the door" className="mt-3 aspect-[4/5] w-full rounded object-cover" />
-            )}
-            {order.lid && <div className="mt-3"><LidSummary lid={order.lid} /></div>}
-            {order.previews.some(Boolean) && (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {order.previews.map((src, index) => (
-                  src ? <img key={index} src={src} alt={`${['Right side', 'Spine', 'Left side'][index]} of the print`} className="aspect-[4/5] w-full rounded bg-black/40 object-cover" /> : <div key={index} className="aspect-[4/5] rounded bg-black/40" />
-                ))}
+              <div className="relative mt-3 aspect-[4/5] overflow-hidden rounded">
+                <img src={order.deliveryPhotoUrl} alt="The box at the door" className="absolute inset-0 h-full w-full object-cover" />
               </div>
             )}
+            {order.lid && <div className="mt-3"><LidSummary lid={order.lid} /></div>}
+            {order.previews.some(Boolean) && <div className="mt-3"><FacePreviews urls={order.previews} /></div>}
           </article>
         )}
       </div>

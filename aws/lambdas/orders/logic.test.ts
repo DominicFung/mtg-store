@@ -7,6 +7,7 @@ import {
   assertTransition,
   canRetry,
   generationDecision,
+  newestOrders,
   nextFulfillment,
   previousFulfillment,
   newOrderNumber,
@@ -116,6 +117,11 @@ test('status moves, shipping, retries, and stale generator messages', () => {
   assert.equal(nextFulfillment('SHIPPED'), 'DELIVERED');
   assert.equal(previousFulfillment('DELIVERED'), 'SHIPPED');
   assert.equal(previousFulfillment('RECEIVED'), null);
+  const merged = newestOrders([
+    [{ orderId: 'old', createdAt: '2026-11-17T00:00:00.000Z' }, { orderId: 'lock#x', createdAt: '2026-11-19T00:00:00.000Z' }],
+    [{ orderId: 'new', createdAt: '2026-11-19T00:00:00.000Z' }, { orderId: 'old', createdAt: '2026-11-17T00:00:00.000Z' }],
+  ], 2);
+  assert.deepEqual(merged.map((row) => row.orderId), ['new', 'old']);
   const mail = readyEmail({ orderNumber: 'MR-AAAAAAAA', name: 'Ada', downloadUrl: 'https://example.test/file', expiresHours: 4 });
   assert.match(mail.subject, /MR-AAAAAAAA/);
   assert.match(mail.text, /admin page/);

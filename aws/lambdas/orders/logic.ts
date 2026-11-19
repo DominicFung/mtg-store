@@ -531,6 +531,8 @@ export function previousFulfillment(status: OrderStatus): OrderStatus | null {
 }
 
 export function fulfillmentLabel(status: string, _paymentStatus: string): string {
+  if (status === 'GENERATING_FILES') return 'Generating files';
+  if (status === 'READY_TO_PRINT') return 'Ready to print';
   if (status === 'PRINTING') return 'Printing';
   if (status === 'READY_TO_SHIP') return 'Ready to ship';
   if (status === 'SHIPPED') return 'Out for delivery';
@@ -566,4 +568,20 @@ export function customerStatusEmail(input: { orderNumber: string; email?: string
 
 export function appendHistory(history: readonly HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
   return [...history, entry];
+}
+
+/** Newest first, one row per order. Used when the all-statuses list reads every status index. */
+export function newestOrders<T extends { orderId?: string; createdAt?: string }>(groups: readonly (readonly T[])[], limit: number): T[] {
+  const seen = new Set<string>();
+  const rows: T[] = [];
+  for (const group of groups) {
+    for (const row of group) {
+      const id = typeof row.orderId === 'string' ? row.orderId : '';
+      if (!id || id.startsWith('lock#') || seen.has(id)) continue;
+      seen.add(id);
+      rows.push(row);
+    }
+  }
+  rows.sort((left, right) => String(right.createdAt ?? '').localeCompare(String(left.createdAt ?? '')));
+  return rows.slice(0, Math.max(0, limit));
 }

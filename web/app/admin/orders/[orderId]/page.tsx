@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import FacePreviews from '../../../components/facePreviews';
 import LidSummary from '../../../components/lidSummary';
 import AdminSignInCard from '../../signInCard';
 import {
@@ -187,10 +188,15 @@ export default function AdminOrderPage() {
               )}
             </div>
             {photoPreview && <img src={photoPreview} alt="Door photo, ready to save" className="aspect-[4/5] w-full max-w-xs rounded object-cover" />}
-            {order.deliveryPhotoUrl && <img src={order.deliveryPhotoUrl} alt="The box at the door" className="aspect-[4/5] w-full max-w-xs rounded object-cover" />}
+            {order.deliveryPhotoUrl && (
+              <div className="relative aspect-[4/5] w-full max-w-xs overflow-hidden rounded">
+                <img src={order.deliveryPhotoUrl} alt="The box at the door" className="absolute inset-0 h-full w-full object-cover" />
+              </div>
+            )}
             <p>Price {order.priceLabel}</p>
             <p className="text-sm text-gray-300">{[order.addressLine1, order.city, order.region, order.postalCode, order.country].filter(Boolean).join(', ')}</p>
             {order.lid && <LidSummary lid={order.lid} />}
+            {order.previews?.some(Boolean) && <FacePreviews urls={order.previews} />}
             <section>
               <h2 className="text-sm font-semibold text-[#e2c275]">Print settings</h2>
               <p className="mt-1 text-sm">{order.profileName} · {order.nozzleSize} mm nozzle · {order.layerCount} colour layers</p>
@@ -237,6 +243,8 @@ async function compressPhoto(file: File): Promise<Blob> {
 }
 
 function fulfillmentLabel(status: string, _paymentStatus: string): string {
+  if (status === 'GENERATING_FILES') return 'Generating files';
+  if (status === 'READY_TO_PRINT') return 'Ready to print';
   if (status === 'PRINTING') return 'Printing';
   if (status === 'READY_TO_SHIP') return 'Ready to ship';
   if (status === 'SHIPPED') return 'Out for delivery';
