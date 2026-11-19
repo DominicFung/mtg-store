@@ -61,10 +61,15 @@ export default function TrackClient() {
                 <li key={`${entry.at}-${index}`}>{entry.at.slice(0, 16).replace('T', ' ')} · {entry.status.replaceAll('_', ' ').toLowerCase()}{entry.note ? ` · ${entry.note}` : ''}</li>
               ))}
             </ol>
+            {order.status === 'DELIVERED' && order.deliveryPhotoUrl && (
+              <img src={order.deliveryPhotoUrl} alt="The box at the door" className="mt-3 aspect-[4/5] w-full rounded object-cover" />
+            )}
             {order.lid && <div className="mt-3"><LidSummary lid={order.lid} /></div>}
             {order.previews.some(Boolean) && (
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {order.previews.map((src, index) => src ? <img key={index} src={src} alt={`${['Right side', 'Spine', 'Left side'][index]} of the print`} className="w-full rounded" /> : null)}
+                {order.previews.map((src, index) => (
+                  src ? <img key={index} src={src} alt={`${['Right side', 'Spine', 'Left side'][index]} of the print`} className="aspect-[4/5] w-full rounded bg-black/40 object-cover" /> : <div key={index} className="aspect-[4/5] rounded bg-black/40" />
+                ))}
               </div>
             )}
           </article>

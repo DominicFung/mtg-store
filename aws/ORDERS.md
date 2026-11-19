@@ -140,4 +140,16 @@ NEXT_PUBLIC_PAYMENTS_URL=<CheckoutUrl output>
 
 A placeholder such as `pk_test_REPLACE_ME`, or a missing URL, keeps the coming-soon state.
 
+When Stripe marks an order paid, the shop address in `notifyEmail` receives one email. It links to `https://themanaramp.ca/admin/orders/<orderId>` and does not include a file link. That page asks for the Cognito admin sign-in. `getAdminOrder` and `refreshDownloadLinks` are admin-group only and mint a new short-lived download each time. Print files stay in the private order bucket, which has no expiry rule. The customer receives a receipt email with the tracking link and no files. Stripe Checkout also sets `customer_email` and `payment_intent_data[receipt_email]` so a Stripe receipt can be turned on in the dashboard.
+
+SES is still in the sandbox until production access is granted. The From address is the verified `notifyEmail` identity. In the sandbox the customer's address must be verified too, or the receipt email fails and the order stores `customerNotifyError`. Request production access in SES, or verify each customer address, before customer receipts can reach anyone else.
+
+## Fulfillment
+
+`/admin` lists orders newest first: order number, customer, date, paid or not, and the current step, with a link to `/admin/orders/<orderId>`. Both pages have one button that walks Received, Printing, Ready to ship, Out for delivery, then Delivered. The list asks for a confirm tap. Either page can undo the last step. Each move appends the existing history array with a timestamp.
+
+Delivered is not a plain status change. The order must already be out for delivery, and the button opens the phone camera (`accept="image/*"` and `capture="environment"`). The page shrinks the photo in the browser, asks `requestDeliveryPhotoUpload` for an admin-only presigned PUT, stores the object at `orders/<orderId>/delivery/<timestamp>.jpg` in the private order bucket, then `confirmDelivery` saves that key. Tracking shows the photo only after delivery, through a one-hour presigned GET minted by `trackOrder` for that order number and email. `downloadUrl` and `profileSnapshotJson` stay null on that response.
+
+Shipped and Delivered also email the customer through the existing SES identity. The message links to the tracking page and does not attach the photo or any print file. The same sandbox limit applies: an unverified customer address fails, and the order stores `customerNotifyError`. Other status mail still waits for `-c customerStatusEmails=true`.
+
 Delivery is in person only. The postal-code FSA decides when one is present: Toronto is every `M` code (including North York, Scarborough, East York, York, and Etobicoke `M8`/`M9`), Mississauga is `L4T L4V L4W L4X L4Y L4Z` and `L5A L5B L5C L5E L5G L5H L5J L5K L5L L5M L5N L5P L5R L5S L5T L5V L5W`, and Milton is `L9T` and `L9E`. A city name is used only when the postal code is missing.

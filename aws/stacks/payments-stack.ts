@@ -7,6 +7,7 @@ import { join } from 'path'
 
 interface PaymentsProps {
   name: string
+  notifyEmail: string
 }
 
 /**
@@ -60,6 +61,16 @@ export class PaymentsStack extends Stack {
     }
     secretKey.grantRead(checkout)
     webhookSecret.grantRead(webhook)
+    webhook.addEnvironment('NOTIFY_EMAIL', props.notifyEmail)
+    webhook.addEnvironment('NOTIFY_TOPIC_ARN', Fn.importValue(`${props.name}-NotifyTopicArn`))
+    webhook.addToRolePolicy(new PolicyStatement({
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'],
+    }))
+    webhook.addToRolePolicy(new PolicyStatement({
+      actions: ['sns:Publish'],
+      resources: [Fn.importValue(`${props.name}-NotifyTopicArn`)],
+    }))
 
     const checkoutUrl = checkout.addFunctionUrl({
       authType: FunctionUrlAuthType.NONE,

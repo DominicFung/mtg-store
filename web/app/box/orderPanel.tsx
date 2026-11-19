@@ -20,11 +20,12 @@ type Props = {
   onProfile: (id: string) => void;
   faceSizes: Array<{ widthMm: number; heightMm: number } | null>;
   lid: LidChoice | null;
+  artSource: 'example' | 'upload' | 'scryfall';
 };
 
 const FACES = ['Right', 'Spine', 'Left'];
 
-export default function OrderPanel({ crops, previews, layers, stops, profile, profiles, onProfile, faceSizes, lid }: Props) {
+export default function OrderPanel({ crops, previews, layers, stops, profile, profiles, onProfile, faceSizes, lid, artSource }: Props) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -65,6 +66,7 @@ export default function OrderPanel({ crops, previews, layers, stops, profile, pr
         crops,
         previews: previews[0] ? previews : crops,
         lid: lid ?? undefined,
+        artSource,
       });
       const url = await startCardPayment(order);
       window.location.assign(url);

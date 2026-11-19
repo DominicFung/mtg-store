@@ -3,9 +3,10 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/colourCore';
 import { profileToSettings, type NozzleProfile } from '../../../packages/print-core/src/profiles';
 import { FACE_NAMES, type FaceName } from '../../../packages/print-core/src/printGeometry';
-import { generationDecision, orderObjectKeys, readyEmail, failedEmail, PRESIGN_TTL_SECONDS, type LidFinish } from '../orders/logic';
+import { generationDecision, orderObjectKeys, failedEmail, type LidFinish } from '../orders/logic';
 import { buildLidPrint } from './lidPrint';
-import { getOrder, notifyOwner, presignGet, requiredEnv, s3, updateOrder } from '../orders/store';
+import { deliverPaidMail } from '../orders/paidNotice';
+import { getOrder, notifyOwner, requiredEnv, s3, updateOrder } from '../orders/store';
 import { buildOrderZip, decodePng } from './archive';
 import type { OrderItem } from '../orders/view';
 
@@ -106,16 +107,7 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
       errorMessage: null,
       history,
     }, 'generationAttempt = :attempt', { ':attempt': message.attempt });
-    const downloadUrl = await presignGet(keys.zip);
-    const mail = readyEmail({
-      orderNumber: order.orderNumber,
-      name: order.name,
-      downloadUrl,
-      expiresHours: Math.round(PRESIGN_TTL_SECONDS / 3600),
-      lid: isLidFinish(order.lid) ? order.lid : null,
-    });
-    const notifyError = await notifyOwner(mail.subject, mail.text);
-    if (notifyError) await updateOrder(order.orderId, { notifyError }, 'attribute_exists(orderId)');
+    await deliverPaidMail(order.orderId);
   } catch (error) {
     const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
     if (name === 'ConditionalCheckFailedException') return;

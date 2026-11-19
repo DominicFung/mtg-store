@@ -7,6 +7,8 @@ import {
   assertTransition,
   canRetry,
   generationDecision,
+  nextFulfillment,
+  previousFulfillment,
   newOrderNumber,
   parseSubmitInput,
   rateLimitMessage,
@@ -67,23 +69,27 @@ test('lid colours are optional, catalogue-backed, and limited to 20 characters',
   assert.equal(plain.lid, undefined);
   const withLid = parseSubmitInput({
     ...valid,
-    lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'red', text: '  Dom Fungus  ', textFilamentId: 'silver' },
+    artSource: 'upload',
+    lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'elegoo-pla-red', text: '  Dom Fungus  ', textFilamentId: 'deeplee-matte-white' },
   });
   assert.equal(withLid.lid?.text, 'Dom Fungus');
   const catalogue = [
     { id: 'elegoo-pla-black', name: 'Elegoo PLA Black', hex: '#161616', td: 0.5 },
     { id: 'elegoo-matte-pla-sakura-pink', name: 'Elegoo Matte PLA Sakura Pink', hex: '#F2A8C0', td: 4.8 },
-    { id: 'red', name: 'Elegoo PLA Red', hex: '#D4252B', td: 3 },
-    { id: 'silver', name: 'GiantArm Silk Silver', hex: '#D5DCE3', td: 1.7 },
+    { id: 'elegoo-pla-red', name: 'Elegoo PLA Red', hex: '#D4252B', td: 3 },
+    { id: 'deeplee-matte-white', name: 'Deeplee Matte White', hex: '#F4F1EA', td: 5 },
+    { id: 'elegoo-pla-beige', name: 'Elegoo PLA Beige', hex: '#E6D5B8', td: 4.4 },
   ];
   const lid = snapshotLid(withLid.lid!, catalogue);
   assert.equal(lid.boxFilamentName, 'Elegoo PLA Black');
   assert.equal(lid.text, 'Dom Fungus');
-  assert.equal(lid.textHex, '#D5DCE3');
-  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'red', text: 'this name is too long now' } }), /20/);
-  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'red', logoFilamentId: 'red' } }), /black or pink/);
-  assert.throws(() => snapshotLid({ boxFilamentId: 'elegoo-pla-red', logoFilamentId: 'red' }, catalogue), /black or pink/);
-  assert.throws(() => snapshotLid({ boxFilamentId: 'missing', logoFilamentId: 'red' }, catalogue), /black or pink/);
+  assert.equal(lid.textHex, '#F4F1EA');
+  assert.equal(lid.logoFilamentName, 'Elegoo PLA Red');
+  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'elegoo-pla-red', text: 'this name is too long now', textFilamentId: 'deeplee-matte-white' } }), /20/);
+  assert.throws(() => parseSubmitInput({ ...valid, artSource: 'example', lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'elegoo-pla-red', textFilamentId: 'deeplee-matte-white' } }), /Sakura Pink/);
+  assert.throws(() => parseSubmitInput({ ...valid, artSource: 'scryfall', lid: { boxFilamentId: 'elegoo-matte-pla-sakura-pink', logoFilamentId: 'deeplee-matte-white', textFilamentId: 'deeplee-matte-white' } }), /black/);
+  assert.throws(() => parseSubmitInput({ ...valid, lid: { boxFilamentId: 'elegoo-pla-black', logoFilamentId: 'elegoo-pla-red', textFilamentId: 'elegoo-pla-red' } }), /white, beige/);
+  assert.throws(() => snapshotLid({ boxFilamentId: 'missing', logoFilamentId: 'elegoo-pla-red', textFilamentId: 'deeplee-matte-white' }, catalogue), /not available/);
   const mail = readyEmail({
     orderNumber: 'MR-AAAAAAAA',
     name: 'Ada',
@@ -98,13 +104,18 @@ test('lid colours are optional, catalogue-backed, and limited to 20 characters',
 
 test('status moves, shipping, retries, and stale generator messages', () => {
   assert.throws(() => assertTransition('RECEIVED', 'SHIPPED'), /Cannot move/);
-  const shipped = assertShipped('PRINTING', 'Canada Post', 'AB123456789CA');
+  const shipped = assertShipped('READY_TO_SHIP', 'Canada Post', 'AB123456789CA');
   assert.equal(shipped.carrier, 'Canada Post');
   assert.equal(canRetry('FAILED'), true);
   assert.equal(canRetry('SHIPPED'), false);
   assert.equal(generationDecision({ status: 'GENERATING_FILES', generationAttempt: 2 }, { attempt: 2 }), 'run');
   assert.equal(generationDecision({ status: 'READY_TO_PRINT', generationAttempt: 2, outputKey: 'orders/x/output/deck-box.zip' }, { attempt: 2 }), 'skip');
   assert.equal(generationDecision({ status: 'GENERATING_FILES', generationAttempt: 3 }, { attempt: 2 }), 'skip');
+  assert.equal(nextFulfillment('READY_TO_PRINT'), 'PRINTING');
+  assert.equal(nextFulfillment('PRINTING'), 'READY_TO_SHIP');
+  assert.equal(nextFulfillment('SHIPPED'), 'DELIVERED');
+  assert.equal(previousFulfillment('DELIVERED'), 'SHIPPED');
+  assert.equal(previousFulfillment('RECEIVED'), null);
   const mail = readyEmail({ orderNumber: 'MR-AAAAAAAA', name: 'Ada', downloadUrl: 'https://example.test/file', expiresHours: 4 });
   assert.match(mail.subject, /MR-AAAAAAAA/);
   assert.match(mail.text, /admin page/);

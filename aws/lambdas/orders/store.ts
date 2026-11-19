@@ -119,27 +119,27 @@ export async function putJson(key: string, body: unknown): Promise<void> {
   }));
 }
 
-export async function presignPut(key: string, byteLength: number): Promise<{ url: string; headers: Record<string, string> }> {
+export async function presignPut(key: string, byteLength: number, contentType = 'image/png'): Promise<{ url: string; headers: Record<string, string> }> {
   const url = await getSignedUrl(s3, new PutObjectCommand({
     Bucket: requiredEnv('ORDER_BUCKET_NAME'),
     Key: key,
-    ContentType: 'image/png',
+    ContentType: contentType,
     ContentLength: byteLength,
   }), { expiresIn: 15 * 60 });
   return {
     url,
     headers: {
-      'content-type': 'image/png',
+      'content-type': contentType,
       'content-length': String(byteLength),
     },
   };
 }
 
-export async function presignGet(key: string): Promise<string> {
+export async function presignGet(key: string, expiresIn = Number(process.env.PRESIGN_TTL_SECONDS ?? 4 * 60 * 60)): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({
     Bucket: requiredEnv('ORDER_BUCKET_NAME'),
     Key: key,
-  }), { expiresIn: Number(process.env.PRESIGN_TTL_SECONDS ?? 4 * 60 * 60) });
+  }), { expiresIn });
 }
 
 export async function objectExists(key: string): Promise<boolean> {
@@ -186,6 +186,18 @@ export async function notifyOwner(subject: string, text: string): Promise<string
       return `${message}; ${snsMessage}`;
     }
   }
+}
+
+export async function emailCustomer(to: string, subject: string, text: string): Promise<void> {
+  const source = requiredEnv('NOTIFY_EMAIL');
+  await ses.send(new SendEmailCommand({
+    Source: source,
+    Destination: { ToAddresses: [to] },
+    Message: {
+      Subject: { Data: subject, Charset: 'UTF-8' },
+      Body: { Text: { Data: text, Charset: 'UTF-8' } },
+    },
+  }));
 }
 
 export async function notifyCustomer(to: string, subject: string, text: string): Promise<void> {

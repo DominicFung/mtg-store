@@ -16,6 +16,7 @@ export type OrderItem = Record<string, unknown> & {
   carrier?: string;
   trackingNumber?: string;
   outputKey?: string;
+  deliveryPhotoKey?: string;
 };
 
 export function summary(item: OrderItem) {
@@ -61,6 +62,9 @@ export async function withImages(item: OrderItem, includeDownload: boolean) {
     const ttl = Number(process.env.PRESIGN_TTL_SECONDS ?? 4 * 60 * 60);
     downloadExpiresAt = new Date(Date.now() + ttl * 1000).toISOString();
   }
+  const deliveryPhotoUrl = includeDownload && item.status === 'DELIVERED' && item.deliveryPhotoKey
+    ? await presignGet(item.deliveryPhotoKey, 60 * 60)
+    : null;
   return {
     ...summary(item),
     history: item.history ?? [],
@@ -69,6 +73,7 @@ export async function withImages(item: OrderItem, includeDownload: boolean) {
     downloadUrl,
     downloadExpiresAt,
     profileSnapshotJson: JSON.stringify(item.profileSnapshot ?? {}),
+    deliveryPhotoUrl,
     lid: lidView(item.lid),
   };
 }

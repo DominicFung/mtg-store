@@ -7,6 +7,8 @@ import {
   canRetry,
   customerStatusEmail,
   isOrderStatus,
+  nextFulfillment,
+  previousFulfillment,
   SHOP_PARTITION,
   type OrderStatus,
 } from '../../orders/logic';
@@ -14,7 +16,9 @@ import {
   documentClient,
   enqueueGeneration,
   getOrder,
+  emailCustomer,
   notifyCustomer,
+  presignPut,
   requiredEnv,
   updateOrder,
 } from '../../orders/store';
@@ -29,6 +33,9 @@ type Args = {
   carrier?: string;
   trackingNumber?: string;
   note?: string;
+  contentType?: string;
+  byteLength?: number;
+  key?: string;
 };
 
 function asOrder(item: Record<string, unknown> | undefined): OrderItem {
@@ -46,6 +53,10 @@ export const handler = async (event: AppSyncResolverEvent<Args>) => {
   if (field === 'refreshDownloadLinks') return withImages(asOrder(await getOrder(event.arguments?.orderId ?? '')), true);
   if (field === 'updateOrderStatus') return updateStatus(event.arguments ?? {});
   if (field === 'retryOrderGeneration') return retry(event.arguments?.orderId ?? '');
+  if (field === 'advanceOrder') return moveFulfillment(event.arguments?.orderId ?? '', 'next');
+  if (field === 'undoOrder') return moveFulfillment(event.arguments?.orderId ?? '', 'previous');
+  if (field === 'requestDeliveryPhotoUpload') return requestPhoto(event.arguments ?? {});
+  if (field === 'confirmDelivery') return confirmDelivery(event.arguments ?? {});
   throw new Error(`Unsupported admin field ${field ?? ''}`);
 };
 
@@ -117,6 +128,72 @@ async function updateStatus(args: Args) {
     }
   }
   return summary({ ...order, status: next, updatedAt: now, carrier, trackingNumber });
+}
+
+async function moveFulfillment(orderId: string, direction: 'next' | 'previous') {
+  const order = asOrder(await getOrder(orderId));
+  const next = direction === 'next' ? nextFulfillment(order.status) : previousFulfillment(order.status);
+  if (!next) throw new Error('That order cannot move that way');
+  if (next === 'DELIVERED') throw new Error('Take the door photo before marking it delivered');
+  const now = new Date().toISOString();
+  const history = [...(order.history ?? []), { status: next, at: now, actor: 'admin', note: direction === 'next' ? 'Status advanced' : 'Status undone' }];
+  const carrier = next === 'SHIPPED' ? 'In person' : order.carrier ?? null;
+  const trackingNumber = next === 'SHIPPED' ? 'Local delivery' : order.trackingNumber ?? null;
+  await updateOrder(order.orderId, {
+    status: next,
+    updatedAt: now,
+    history,
+    carrier,
+    trackingNumber,
+  }, 'attribute_exists(orderId)');
+  if (next === 'SHIPPED' || next === 'DELIVERED') {
+    const mail = customerStatusEmail({ orderNumber: order.orderNumber, email: order.email, status: next, carrier: carrier ?? undefined, trackingNumber: trackingNumber ?? undefined });
+    try {
+      await emailCustomer(order.email, mail.subject, mail.text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Customer email failed';
+      await updateOrder(order.orderId, { customerNotifyError: message.slice(0, 500) }, 'attribute_exists(orderId)');
+    }
+  }
+  return summary({ ...order, status: next, updatedAt: now, carrier: carrier ?? undefined, trackingNumber: trackingNumber ?? undefined });
+}
+
+async function requestPhoto(args: Args) {
+  const order = asOrder(await getOrder(args.orderId ?? ''));
+  const contentType = args.contentType === 'image/png' ? 'image/png' : 'image/jpeg';
+  const byteLength = Number(args.byteLength);
+  if (!Number.isInteger(byteLength) || byteLength < 1000 || byteLength > 2_000_000) throw new Error('The photo must be under 2 MB');
+  const extension = contentType === 'image/png' ? 'png' : 'jpg';
+  const key = `orders/${order.orderId}/delivery/${Date.now()}.${extension}`;
+  const signed = await presignPut(key, byteLength, contentType);
+  return { key, url: signed.url, headersJson: JSON.stringify(signed.headers) };
+}
+
+async function confirmDelivery(args: Args) {
+  const order = asOrder(await getOrder(args.orderId ?? ''));
+  const key = (args.key ?? '').trim();
+  if (!key.startsWith(`orders/${order.orderId}/delivery/`)) throw new Error('That photo does not belong to this order');
+  if (order.status !== 'SHIPPED' && order.status !== 'DELIVERED') throw new Error('Mark it out for delivery before the door photo');
+  const now = new Date().toISOString();
+  const history = order.status === 'DELIVERED'
+    ? order.history ?? []
+    : [...(order.history ?? []), { status: 'DELIVERED', at: now, actor: 'admin', note: 'Delivered with a door photo' }];
+  await updateOrder(order.orderId, {
+    status: 'DELIVERED',
+    updatedAt: now,
+    history,
+    deliveryPhotoKey: key,
+  }, 'attribute_exists(orderId)');
+  if (order.status !== 'DELIVERED') {
+    const mail = customerStatusEmail({ orderNumber: order.orderNumber, email: order.email, status: 'DELIVERED' });
+    try {
+      await emailCustomer(order.email, mail.subject, mail.text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Customer email failed';
+      await updateOrder(order.orderId, { customerNotifyError: message.slice(0, 500) }, 'attribute_exists(orderId)');
+    }
+  }
+  return summary({ ...order, status: 'DELIVERED', updatedAt: now });
 }
 
 async function retry(orderId: string) {

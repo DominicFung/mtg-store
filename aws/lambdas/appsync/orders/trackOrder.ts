@@ -1,7 +1,7 @@
 import type { AppSyncResolverEvent } from 'aws-lambda';
 import { isOrderNumber } from '../../../../packages/print-core/src/orderNumber';
 import { normalizeEmail } from '../../orders/logic';
-import { findByOrderNumber } from '../../orders/store';
+import { findByOrderNumber, presignGet } from '../../orders/store';
 import { withImages, type OrderItem } from '../../orders/view';
 
 export const handler = async (event: AppSyncResolverEvent<{ orderNumber: string; email: string }>) => {
@@ -17,5 +17,8 @@ export const handler = async (event: AppSyncResolverEvent<{ orderNumber: string;
     downloadUrl: null,
     downloadExpiresAt: null,
     profileSnapshotJson: null,
+    deliveryPhotoUrl: order.status === 'DELIVERED' && typeof order.deliveryPhotoKey === 'string'
+      ? await presignGet(order.deliveryPhotoKey, 60 * 60)
+      : null,
   };
 };

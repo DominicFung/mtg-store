@@ -45,13 +45,7 @@ export default function ReceiptClient() {
             <p>Price <span className="text-[#e2c275]">{order.priceLabel}</span></p>
             <p className="text-xs text-gray-500">{paymentNote(order.paymentStatus)}</p>
             <p className="text-sm">{order.profileName} nozzle · {order.layerCount} colour layers</p>
-            {order.previews.some(Boolean) && (
-              <div className="grid grid-cols-3 gap-2">
-                {order.previews.map((src, index) => (
-                  src ? <img key={index} src={src} alt={`${['Right side', 'Spine', 'Left side'][index]} of the print`} className="w-full rounded bg-black/40" /> : null
-                ))}
-              </div>
-            )}
+            {order.previews.some(Boolean) && <FacePreviews urls={order.previews} />}
             {order.lid && (
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400">Lid</p>
@@ -75,6 +69,19 @@ export default function ReceiptClient() {
         )}
       </div>
     </main>
+  );
+}
+
+function FacePreviews({ urls }: { urls: string[] }) {
+  const labels = ['Right side', 'Spine', 'Left side'];
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {urls.map((src, index) => (
+        src ? (
+          <img key={index} src={src} alt={labels[index] ?? 'Face of the print'} className="aspect-[4/5] w-full rounded bg-black/40 object-cover" />
+        ) : <div key={index} className="aspect-[4/5] rounded bg-black/40" />
+      ))}
+    </div>
   );
 }
 

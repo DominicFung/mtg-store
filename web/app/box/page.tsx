@@ -7,15 +7,10 @@ import SpinningBoxWithTextures from './spinningBox';
 import ColorCore from './colorCore';
 import CommanderSearch from './commanderSearch';
 import OrderPanel from './orderPanel';
-import LidFinish, {
-  DEFAULT_BOX_FILAMENT_ID,
-  DEFAULT_LOGO_FILAMENT_ID,
-  DEFAULT_TEXT_FILAMENT_ID,
-  boxFilamentChoices,
-  filamentById,
-} from './lidFinish';
+import LidFinish, { filamentById } from './lidFinish';
 import { chooseColorCore } from '../../../packages/print-core/src/chooseColors';
 import { clampLidOpen } from '../../../packages/print-core/src/lidGeometry';
+import { BOX_BLACK_ID, BOX_PINK_ID, DEFAULT_LID_MARK_ID, EXAMPLE_LID_MARK_ID, lidMarkById, type LidMark } from '../../../packages/print-core/src/lidMarks';
 import type { ExtendSide, SubjectBounds } from '../../../packages/print-core/src/outpaint';
 import { useFilaments } from '../lib/filaments';
 import {
@@ -30,10 +25,7 @@ import { renderLayeredCrops } from '../lib/renderLayers';
 import { listActiveProfiles, outpaintArt } from '../lib/shopOrders';
 import { usePrintSettings } from '../lib/usePrintSettings';
 import {
-  EXAMPLE_BOX_FILAMENT_ID,
-  EXAMPLE_LOGO_FILAMENT_ID,
   EXAMPLE_STITCHED,
-  EXAMPLE_TEXT_FILAMENT_ID,
   exampleEndLayers,
   exampleLayers,
   loadExampleCrops,
@@ -70,9 +62,7 @@ export default function Home() {
   const [retryToken, setRetryToken] = useState(0);
   const [profiles, setProfiles] = useState<ResolvedProfile[]>(() => LAUNCH_PROFILES.map(resolveProfile));
   const [profileId, setProfileId] = useState(LAUNCH_PROFILES[0].id);
-  const [boxFilamentId, setBoxFilamentId] = useState(DEFAULT_BOX_FILAMENT_ID);
-  const [logoFilamentId, setLogoFilamentId] = useState(DEFAULT_LOGO_FILAMENT_ID);
-  const [textFilamentId, setTextFilamentId] = useState(DEFAULT_TEXT_FILAMENT_ID);
+  const [lidMarkId, setLidMarkId] = useState<LidMark['id']>(DEFAULT_LID_MARK_ID);
   const [lidName, setLidName] = useState('');
   const [lidOpen, setLidOpen] = useState(0);
   const [shot, setShot] = useState<string | null>(null);
@@ -96,11 +86,7 @@ export default function Home() {
   const layerCount = profile?.layerCount ?? colorCoreLayerCount(settings);
 
   const clearExample = () => {
-    if (exampleOn) {
-      setBoxFilamentId(DEFAULT_BOX_FILAMENT_ID);
-      setLogoFilamentId(DEFAULT_LOGO_FILAMENT_ID);
-      setTextFilamentId(DEFAULT_TEXT_FILAMENT_ID);
-    }
+    if (exampleOn) setLidMarkId(DEFAULT_LID_MARK_ID);
     exampleHoldRef.current = false;
     setExampleOn(false);
   };
@@ -110,11 +96,7 @@ export default function Home() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (exampleOnRef.current) {
-        setBoxFilamentId(DEFAULT_BOX_FILAMENT_ID);
-        setLogoFilamentId(DEFAULT_LOGO_FILAMENT_ID);
-        setTextFilamentId(DEFAULT_TEXT_FILAMENT_ID);
-      }
+      if (exampleOnRef.current) setLidMarkId(DEFAULT_LID_MARK_ID);
       exampleHoldRef.current = false;
       setExampleOn(false);
       setColoursTouched(false);
@@ -264,10 +246,11 @@ export default function Home() {
     size ? modelSizeForCrop(size.width, size.height, settings.height) : null
   ));
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
-  const boxChoices = boxFilamentChoices(shopFilaments);
-  const boxFilament = boxChoices.find((filament) => filament.id === boxFilamentId) ?? boxChoices[0] ?? null;
-  const logoFilament = filamentById(shopFilaments, logoFilamentId, DEFAULT_LOGO_FILAMENT_ID);
-  const textFilament = filamentById(shopFilaments, textFilamentId, DEFAULT_TEXT_FILAMENT_ID);
+  const lockedBoxId = exampleOn ? BOX_PINK_ID : BOX_BLACK_ID;
+  const lidMark = lidMarkById(lidMarkId);
+  const boxFilament = filamentById(shopFilaments, lockedBoxId, lockedBoxId);
+  const logoFilament = filamentById(shopFilaments, lidMark.logoFilamentId, lidMark.logoFilamentId);
+  const textFilament = filamentById(shopFilaments, lidMark.textFilamentId, lidMark.textFilamentId);
   const { meshes: relief, pending: reliefPending } = useReliefMeshes(
     crops,
     layers,
@@ -412,9 +395,7 @@ export default function Home() {
       setImageToken((current) => current + 1);
       setCropBox(null);
       setColoursTouched(true);
-      setBoxFilamentId(EXAMPLE_BOX_FILAMENT_ID);
-      setLogoFilamentId(EXAMPLE_LOGO_FILAMENT_ID);
-      setTextFilamentId(EXAMPLE_TEXT_FILAMENT_ID);
+      setLidMarkId(EXAMPLE_LID_MARK_ID);
       setLayers(exampleLayers(shopFilaments));
       setStops(exampleEndLayers(layerCount));
       setCrops(nextCrops);
@@ -589,14 +570,14 @@ export default function Home() {
               )}
               <LidFinish
                 filaments={shopFilaments}
-                boxId={boxFilament?.id ?? boxFilamentId}
-                logoId={logoFilament?.id ?? logoFilamentId}
-                textId={textFilament?.id ?? textFilamentId}
+                box={boxFilament}
+                lockedLabel={exampleOn
+                  ? 'The example prints in Elegoo Matte PLA Sakura Pink. This colour is fixed.'
+                  : 'Card art and uploads print in Elegoo PLA Black. This colour is fixed.'}
+                markId={lidMark.id}
                 name={lidName}
                 open={lidOpen}
-                onBox={setBoxFilamentId}
-                onLogo={setLogoFilamentId}
-                onTextColour={setTextFilamentId}
+                onMark={setLidMarkId}
                 onName={setLidName}
                 onOpen={(value) => setLidOpen(clampLidOpen(value))}
               />
@@ -640,6 +621,7 @@ export default function Home() {
                 textFilament: textFilament,
                 text: lidName,
               } : null}
+              artSource={exampleOn ? 'example' : artUrl ? 'scryfall' : 'upload'}
             />
           )}
         </div>
