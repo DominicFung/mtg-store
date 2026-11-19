@@ -1,10 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import AdminSignInCard from './signInCard';
 import {
-  adminConfigured,
-  adminSignIn,
   adminSignOut,
   adminToken,
   deactivateProfile,
@@ -21,7 +20,6 @@ import {
   type ShopOrder,
 } from '../lib/shopOrders';
 import { LAUNCH_PROFILES, resolveProfile, type NozzleProfile, type ResolvedProfile } from '../lib/printGeometry';
-import { missingShopConfig } from '../lib/publicConfig';
 import LidSummary from '../components/lidSummary';
 
 const STATUSES = ['', 'RECEIVED', 'GENERATING_FILES', 'READY_TO_PRINT', 'PRINTING', 'READY_TO_SHIP', 'SHIPPED', 'DELIVERED', 'FAILED', 'CANCELLED'];
@@ -84,9 +82,6 @@ function OrderMoves({
 export default function AdminPage() {
   const [signedIn, setSignedIn] = useState(false);
   const [preview, setPreview] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [status, setStatus] = useState('');
   const [filterEmail, setFilterEmail] = useState('');
@@ -109,47 +104,13 @@ export default function AdminPage() {
     if (signedIn || preview) void refresh();
   }, [signedIn, preview]);
 
-  const signIn = async (event: FormEvent) => {
-    event.preventDefault();
-    setAuthError('');
-    try {
-      await adminSignIn(email, password);
-      setSignedIn(true);
-    } catch (caught) {
-      setAuthError(caught instanceof Error ? caught.message : 'Sign-in failed');
-    }
-  };
-
-  const missingConfig = missingShopConfig();
-
   if (!signedIn && !preview) {
     return (
-      <main className="min-h-full bg-[#12182c] px-4 py-10 text-white">
-        <form onSubmit={(event) => { void signIn(event); }} className="mx-auto max-w-md space-y-3 rounded-xl border border-white/10 bg-black/30 p-6">
-          <h1 className="text-2xl font-bold text-[#e2c275]">Shop admin</h1>
-          <p className="text-sm text-gray-300">Dominic only. The user pool does not allow public sign-up, and every admin mutation checks the admin group.</p>
-          {missingConfig.length > 0 && (
-            <p className="rounded-md border border-amber-300/40 bg-amber-950/40 p-3 text-sm text-amber-100">
-              This build is missing {missingConfig.join(', ')}. Next reads those values when it builds, so set them in Amplify and rebuild. Sign-in stays disabled until then.
-            </p>
-          )}
-          <label className="block text-xs text-gray-400" htmlFor="admin-email">Email
-            <input id="admin-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-[#1a1a2e] px-3" />
-          </label>
-          <label className="block text-xs text-gray-400" htmlFor="admin-password">Password
-            <input id="admin-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-[#1a1a2e] px-3" />
-          </label>
-          {authError && <p className="text-sm text-amber-200">{authError}</p>}
-          <button type="submit" className="min-h-11 w-full rounded-md bg-[#e2c275] font-semibold text-black" disabled={!adminConfigured()}>
-            Sign in
-          </button>
-          {!adminConfigured() && (
-            <button type="button" className="min-h-11 w-full rounded-md border border-white/20 text-sm" onClick={() => setPreview(true)}>
-              Preview orders in this browser
-            </button>
-          )}
-        </form>
-      </main>
+      <AdminSignInCard
+        intro="Dominic only. The user pool does not allow public sign-up, and every admin mutation checks the admin group."
+        onSignedIn={() => setSignedIn(true)}
+        onPreview={() => setPreview(true)}
+      />
     );
   }
 

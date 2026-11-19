@@ -70,7 +70,7 @@ aws cognito-idp admin-add-user-to-group \
   --region us-east-1
 ```
 
-Sign in at `/admin` with that email. Customer status email is off unless you deploy with `-c customerStatusEmails=true`.
+Sign in at `/admin` with that email. The first visit with the temporary password asks for a permanent one on the page: 12 characters, with a lowercase letter, an uppercase letter, a number, and a symbol. Forgot password on the same page emails a code. There is no public sign-up. A temporary password expires after 7 days, and after that a new temporary password has to be issued before the page can set a permanent one. `admin-set-user-password --permanent` still works if you set it ahead of time. Customer status email is off unless you deploy with `-c customerStatusEmails=true`.
 
 ## SES
 
