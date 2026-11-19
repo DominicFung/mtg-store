@@ -236,6 +236,10 @@ export class AppsyncStack extends Stack {
       resources: [`${orderBucketArn}/*`],
     }))
     orderRole.addToPolicy(new PolicyStatement({
+      actions: ['s3:ListBucket'],
+      resources: [orderBucketArn],
+    }))
+    orderRole.addToPolicy(new PolicyStatement({
       actions: ['sqs:SendMessage'],
       resources: [orderQueueArn],
     }))

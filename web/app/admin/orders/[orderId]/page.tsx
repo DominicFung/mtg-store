@@ -14,26 +14,12 @@ import {
   advanceShopOrder,
   loadOrder,
   refreshShopDownload,
+  retryShopOrder,
   saveDownload,
   undoShopOrder,
   uploadDeliveryPhoto,
   type ShopOrder,
 } from '../../../lib/shopOrders';
-
-const PRINT_FILES = [
-  'left.stl',
-  'spine.stl',
-  'right.stl',
-  'left-details.txt',
-  'spine-details.txt',
-  'right-details.txt',
-  'filament-layers.json',
-  'box-body.stl',
-  'lid-base.stl',
-  'lid-spark.stl',
-  'lid-colours.txt',
-  'lid-text.stl (when the lid has a name)',
-];
 
 export default function AdminOrderPage() {
   const params = useParams<{ orderId: string }>();
@@ -112,6 +98,20 @@ export default function AdminOrderPage() {
       await reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not save the door photo');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const generate = async () => {
+    if (!orderId) return;
+    setBusy(true);
+    setError('');
+    try {
+      await retryShopOrder(orderId);
+      await reload();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not start file generation');
     } finally {
       setBusy(false);
     }
@@ -213,23 +213,7 @@ export default function AdminOrderPage() {
                 ))}
               </ol>
             )}
-            <section>
-              <h2 className="text-sm font-semibold text-[#e2c275]">Print files</h2>
-              <p className="mt-1 text-xs text-gray-400">They stay in the private order bucket and are not deleted. A download link is created only for this signed-in session and expires in a few hours.</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                {PRINT_FILES.filter((name) => name !== 'lid-text.stl (when the lid has a name)' || order.lid?.text).map((name) => <li key={name}>{name}</li>)}
-              </ul>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" onClick={() => { void download('faces'); }} disabled={busy} className="min-h-11 rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:opacity-50">
-                  {busy ? 'Preparing download…' : 'Download'}
-                </button>
-                <button type="button" onClick={() => { void download('all'); }} disabled={busy} className="min-h-11 rounded-md border border-[#e2c275] px-4 text-sm font-semibold text-[#e2c275] disabled:opacity-50">
-                  Download all
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-gray-400">Download is the three face plates. Download all is the whole print bundle.</p>
-              {downloadUrl && <p className="mt-2 break-all text-xs text-gray-400">A fresh link is ready. It is not emailed and customers cannot request one.</p>}
-            </section>
+            <PrintFiles order={order} busy={busy} downloadUrl={downloadUrl} onDownload={(which) => { void download(which); }} onGenerate={() => { void generate(); }} />
           </article>
         )}
       </div>
@@ -248,6 +232,51 @@ async function compressPhoto(file: File): Promise<Blob> {
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.7));
   return blob ?? file;
+}
+
+function PrintFiles({
+  order,
+  busy,
+  downloadUrl,
+  onDownload,
+  onGenerate,
+}: {
+  order: ShopOrder;
+  busy: boolean;
+  downloadUrl: string;
+  onDownload: (which: 'faces' | 'all') => void;
+  onGenerate: () => void;
+}) {
+  const files = (order.generatedFiles ?? []).map((key) => key.split('/').pop() || key);
+  const ready = files.length > 0 || Boolean(order.outputKey);
+  const failed = order.generationStatus === 'FAILED' || Boolean(order.generationError);
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-[#e2c275]">Print files</h2>
+      <p className="mt-1 text-xs text-gray-400">They stay in the private order bucket and are not deleted. A download link is created only for this signed-in session and expires in a few hours.</p>
+      {!ready && !failed && <p className="mt-3 text-sm text-amber-100">Files not generated yet.</p>}
+      {failed && <p className="mt-3 text-sm text-amber-100">Generation failed: {order.generationError || order.errorMessage || 'unknown error'}</p>}
+      {order.generationStatus === 'GENERATING' && <p className="mt-2 text-sm text-gray-300">Generating print files…</p>}
+      {files.length > 0 && (
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+          {files.map((name) => <li key={name}>{name}</li>)}
+        </ul>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={onGenerate} disabled={busy || order.generationStatus === 'GENERATING'} className="min-h-11 rounded-md border border-white/20 px-4 text-sm">
+          {ready || failed ? 'Regenerate files' : 'Generate files'}
+        </button>
+        <button type="button" onClick={() => onDownload('faces')} disabled={busy || !ready} className="min-h-11 rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:opacity-50">
+          {busy ? 'Preparing download…' : 'Download'}
+        </button>
+        <button type="button" onClick={() => onDownload('all')} disabled={busy || !ready} className="min-h-11 rounded-md border border-[#e2c275] px-4 text-sm font-semibold text-[#e2c275] disabled:opacity-50">
+          Download all
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-gray-400">Download is the three face plates. Download all is the whole print bundle.</p>
+      {downloadUrl && <p className="mt-2 break-all text-xs text-gray-400">A fresh link is ready. It is not emailed and customers cannot request one.</p>}
+    </section>
+  );
 }
 
 function fulfillmentLabel(status: string, _paymentStatus: string): string {

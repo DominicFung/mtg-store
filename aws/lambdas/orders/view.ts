@@ -17,6 +17,8 @@ export type OrderItem = Record<string, unknown> & {
   trackingNumber?: string;
   outputKey?: string;
   deliveryPhotoKey?: string;
+  generationStatus?: string;
+  generationError?: string;
 };
 
 export function summary(item: OrderItem) {
@@ -35,6 +37,9 @@ export function summary(item: OrderItem) {
     nozzleSize: profile.nozzleSize ?? 0,
     layerCount: profile.layerCount ?? 0,
     errorMessage: item.errorMessage ?? null,
+    generationStatus: typeof item.generationStatus === 'string' ? item.generationStatus : null,
+    generationError: typeof item.generationError === 'string' ? item.generationError : null,
+    outputKey: item.outputKey ?? null,
     carrier: item.carrier ?? null,
     trackingNumber: item.trackingNumber ?? null,
     note: typeof item.note === 'string' ? item.note : null,

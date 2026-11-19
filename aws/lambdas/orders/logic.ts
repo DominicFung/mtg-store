@@ -452,17 +452,28 @@ export { isOrderNumber, newOrderNumber, colorCoreLayerCount };
 
 export type GenerationDecision = 'run' | 'skip';
 
+const FULFILLMENT_LOCKED = new Set(['PRINTING', 'READY_TO_SHIP', 'SHIPPED', 'DELIVERED']);
+
+export function fulfillmentPreserved(status: string): boolean {
+  return FULFILLMENT_LOCKED.has(status);
+}
+
+export function canBackstopEnqueue(order: { outputKey?: string; generationStatus?: string; status?: string }): boolean {
+  if (order.outputKey) return false;
+  if (order.generationStatus === 'GENERATING' || order.generationStatus === 'READY') return false;
+  if (order.status === 'GENERATING_FILES') return false;
+  return true;
+}
+
 export function generationDecision(order: {
   status: OrderStatus;
   generationAttempt: number;
   outputKey?: string;
+  generationStatus?: string;
 }, message: { attempt: number }): GenerationDecision {
   if (message.attempt !== order.generationAttempt) return 'skip';
-  if (order.status === 'READY_TO_PRINT' && order.outputKey) return 'skip';
-  if (order.status === 'CANCELLED' || order.status === 'DELIVERED' || order.status === 'SHIPPED' || order.status === 'PRINTING' || order.status === 'READY_TO_SHIP') {
-    return 'skip';
-  }
-  if (order.status === 'GENERATING_FILES' || order.status === 'FAILED' || order.status === 'READY_TO_PRINT') return 'run';
+  if (order.generationStatus === 'GENERATING') return 'run';
+  if (!order.outputKey && order.generationStatus !== 'READY') return 'run';
   return 'skip';
 }
 
