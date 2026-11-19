@@ -71,6 +71,11 @@ export class PaymentsStack extends Stack {
       actions: ['sns:Publish'],
       resources: [Fn.importValue(`${props.name}-NotifyTopicArn`)],
     }))
+    webhook.addEnvironment('ORDER_QUEUE_URL', Fn.importValue(`${props.name}-OrderQueueUrl`))
+    webhook.addToRolePolicy(new PolicyStatement({
+      actions: ['sqs:SendMessage'],
+      resources: [Fn.importValue(`${props.name}-OrderQueueArn`)],
+    }))
 
     const checkoutUrl = checkout.addFunctionUrl({
       authType: FunctionUrlAuthType.NONE,

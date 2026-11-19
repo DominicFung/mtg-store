@@ -51,6 +51,10 @@ export type ShopOrder = {
   postalCode?: string;
   country?: string;
   errorMessage?: string;
+  generationStatus?: string;
+  generationError?: string;
+  generatedFiles?: string[];
+  outputKey?: string;
   carrier?: string;
   trackingNumber?: string;
   profileSnapshotJson?: string;
@@ -334,7 +338,7 @@ export async function loadOrder(orderId: string): Promise<ShopOrder | null> {
       `query Get($orderId: ID!) {
         getAdminOrder(orderId: $orderId) {
           orderId orderNumber email name status createdAt updatedAt priceLabel paymentStatus
-          profileName nozzleSize layerCount errorMessage carrier trackingNumber note
+          profileName nozzleSize layerCount errorMessage generationStatus generationError generatedFiles carrier trackingNumber note
           addressLine1 city region postalCode country previewUrls downloadUrl profileSnapshotJson deliveryPhotoUrl
           history { status at actor note }
           stops { filamentId name hex td type brand endLayer depthMm }
@@ -386,7 +390,19 @@ export async function retryShopOrder(orderId: string): Promise<void> {
     );
     return;
   }
-  await updateShopStatus(orderId, 'GENERATING_FILES', { note: 'Retry generation' });
+  const now = new Date().toISOString();
+  const locked = new Set(['PRINTING', 'READY_TO_SHIP', 'SHIPPED', 'DELIVERED']);
+  writeOrders(readOrders().map((order) => {
+    if (order.orderId !== orderId) return order;
+    const preserve = locked.has(order.status);
+    return {
+      ...order,
+      status: preserve ? order.status : 'GENERATING_FILES',
+      generationStatus: 'GENERATING',
+      generationError: undefined,
+      updatedAt: now,
+    };
+  }));
 }
 
 const NEXT_STATUS: Record<string, string> = {

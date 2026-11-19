@@ -13,6 +13,7 @@ import {
   CreateMultipartUploadCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -150,6 +151,16 @@ export async function presignGet(key: string, expiresIn = Number(process.env.PRE
     Key: key,
     ResponseContentDisposition: filename ? `attachment; filename="${filename.replace(/"/g, '')}"` : undefined,
   }), { expiresIn });
+}
+
+export async function listOrderOutput(orderId: string): Promise<string[]> {
+  const listed = await s3.send(new ListObjectsV2Command({
+    Bucket: requiredEnv('ORDER_BUCKET_NAME'),
+    Prefix: `orders/${orderId}/output/`,
+  }));
+  return (listed.Contents ?? [])
+    .map((item) => item.Key)
+    .filter((key): key is string => typeof key === 'string' && !key.endsWith('/'));
 }
 
 export async function objectSize(key: string): Promise<number> {
@@ -321,13 +332,28 @@ export async function putPrintSettings(item: Record<string, unknown>): Promise<v
   }));
 }
 
+const RESERVED_WORDS = new Set([
+  'status', 'name', 'size', 'data', 'timestamp', 'value', 'type', 'comment', 'year', 'order', 'key', 'path',
+]);
+
+/** Reserved words left bare in a condition. Aliases (#status) and attribute_exists() are fine. */
+export function unaliasedReservedWords(expression: string): string[] {
+  const stripped = expression
+    .replace(/attribute_(not_)?exists\([^)]*\)/g, ' ')
+    .replace(/#[A-Za-z0-9_]+/g, ' ')
+    .replace(/:[A-Za-z0-9_]+/g, ' ');
+  const words = stripped.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+  return [...new Set(words.filter((word) => RESERVED_WORDS.has(word.toLowerCase())))];
+}
+
 export async function updateOrder(
   orderId: string,
   updates: Record<string, unknown>,
   condition?: string,
   values?: Record<string, unknown>,
+  conditionNames?: Record<string, string>,
 ): Promise<void> {
-  const names: Record<string, string> = {};
+  const names: Record<string, string> = { ...(conditionNames ?? {}) };
   const expressionValues: Record<string, unknown> = { ...(values ?? {}) };
   const sets: string[] = [];
   Object.entries(updates).forEach(([key, value], index) => {
@@ -337,6 +363,12 @@ export async function updateOrder(
     expressionValues[placeholder] = value;
     sets.push(`${name} = ${placeholder}`);
   });
+  if (condition) {
+    const bare = unaliasedReservedWords(condition);
+    if (bare.length) {
+      throw new Error(`Condition uses reserved word ${bare.join(', ')} without an ExpressionAttributeNames alias`);
+    }
+  }
   await documentClient.send(new UpdateCommand({
     TableName: requiredEnv('ORDERS_TABLE_NAME'),
     Key: { orderId },

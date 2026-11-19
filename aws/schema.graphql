@@ -175,6 +175,9 @@ type OrderDetail @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"])
   nozzleSize: Float!
   layerCount: Int!
   errorMessage: String
+  generationStatus: String
+  generationError: String
+  generatedFiles: [String!]
   carrier: String
   trackingNumber: String
   note: String

@@ -3,7 +3,7 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { hexToRgb, type CoreStop } from '../../../packages/print-core/src/colourCore';
 import { profileToSettings, type NozzleProfile } from '../../../packages/print-core/src/profiles';
 import { FACE_NAMES, type FaceName } from '../../../packages/print-core/src/printGeometry';
-import { generationDecision, orderObjectKeys, failedEmail, type LidFinish } from '../orders/logic';
+import { fulfillmentPreserved, generationDecision, orderObjectKeys, failedEmail, type LidFinish } from '../orders/logic';
 import { buildLidPrint } from './lidPrint';
 import { deliverPaidMail } from '../orders/paidNotice';
 import { getOrder, notifyOwner, requiredEnv, s3, updateOrder } from '../orders/store';
@@ -26,13 +26,18 @@ async function readObject(key: string): Promise<Uint8Array> {
 
 async function markFailed(order: OrderItem, message: string): Promise<void> {
   const now = new Date().toISOString();
-  const history = [...(order.history ?? []), { status: 'FAILED', at: now, actor: 'generator', note: message.slice(0, 500) }];
-  await updateOrder(order.orderId, {
-    status: 'FAILED',
-    updatedAt: now,
+  const note = message.slice(0, 500);
+  const updates: Record<string, unknown> = {
+    generationStatus: 'FAILED',
+    generationError: message.slice(0, 2000),
     errorMessage: message.slice(0, 2000),
-    history,
-  }, 'attribute_exists(orderId)');
+    updatedAt: now,
+  };
+  if (!fulfillmentPreserved(order.status)) {
+    updates.status = 'FAILED';
+    updates.history = [...(order.history ?? []), { status: 'FAILED', at: now, actor: 'generator', note }];
+  }
+  await updateOrder(order.orderId, updates, 'attribute_exists(orderId)');
   const mail = failedEmail({ orderNumber: order.orderNumber, error: message });
   const notifyError = await notifyOwner(mail.subject, mail.text);
   if (notifyError) {
@@ -62,6 +67,7 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
     status: order.status,
     generationAttempt: Number(order.generationAttempt ?? 0),
     outputKey: order.outputKey,
+    generationStatus: typeof order.generationStatus === 'string' ? order.generationStatus : undefined,
   }, { attempt: message.attempt });
   if (decision === 'skip') return;
 
@@ -108,15 +114,25 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
       ContentType: 'application/zip',
     }));
     const now = new Date().toISOString();
-    const history = [...(order.history ?? []), { status: 'READY_TO_PRINT', at: now, actor: 'generator', note: 'Print files are ready' }];
-    await updateOrder(order.orderId, {
-      status: 'READY_TO_PRINT',
-      updatedAt: now,
+    const firstFiles = !order.outputKey;
+    const updates: Record<string, unknown> = {
+      generationStatus: 'READY',
+      generationError: null,
       outputKey: keys.zip,
       errorMessage: null,
-      history,
-    }, 'generationAttempt = :attempt', { ':attempt': message.attempt });
-    await deliverPaidMail(order.orderId);
+      updatedAt: now,
+    };
+    if (!fulfillmentPreserved(order.status)) {
+      updates.status = 'READY_TO_PRINT';
+      updates.history = [...(order.history ?? []), {
+        status: 'READY_TO_PRINT',
+        at: now,
+        actor: 'generator',
+        note: firstFiles ? 'Print files are ready' : 'Print files regenerated',
+      }];
+    }
+    await updateOrder(order.orderId, updates, 'generationAttempt = :attempt', { ':attempt': message.attempt });
+    if (firstFiles) await deliverPaidMail(order.orderId);
   } catch (error) {
     const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
     if (name === 'ConditionalCheckFailedException') return;

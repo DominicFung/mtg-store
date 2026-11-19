@@ -4,8 +4,8 @@ import { assertAdmin } from '../../orders/auth';
 import {
   assertShipped,
   assertTransition,
-  canRetry,
   customerStatusEmail,
+  fulfillmentPreserved,
   isOrderStatus,
   newestOrders,
   nextFulfillment,
@@ -20,6 +20,7 @@ import {
   getOrder,
   emailCustomer,
   notifyCustomer,
+  listOrderOutput,
   objectExists,
   objectSize,
   presignGet,
@@ -57,7 +58,7 @@ export const handler = async (event: AppSyncResolverEvent<Args>) => {
   assertAdmin(event.identity);
   const field = event.info?.fieldName;
   if (field === 'listOrders') return listOrders(event.arguments ?? {});
-  if (field === 'getAdminOrder') return withImages(asOrder(await getOrder(event.arguments?.orderId ?? '')), true);
+  if (field === 'getAdminOrder') return adminDetail(event.arguments?.orderId ?? '');
   if (field === 'refreshDownloadLinks') return refreshDownloads(event.arguments?.orderId ?? '');
   if (field === 'updateOrderStatus') return updateStatus(event.arguments ?? {});
   if (field === 'retryOrderGeneration') return retry(event.arguments?.orderId ?? '');
@@ -231,20 +232,39 @@ async function confirmDelivery(args: Args) {
   return summary({ ...order, status: 'DELIVERED', updatedAt: now });
 }
 
+async function adminDetail(orderId: string) {
+  const order = asOrder(await getOrder(orderId));
+  const detail = await withImages(order, true);
+  const generatedFiles = await listOrderOutput(order.orderId);
+  return { ...detail, generatedFiles };
+}
+
 async function retry(orderId: string) {
   const order = asOrder(await getOrder(orderId));
-  if (!canRetry(order.status)) throw new Error(`Cannot regenerate files from ${order.status}`);
+  if (order.status === 'CANCELLED') throw new Error('Cannot generate files for a cancelled order');
+  if (order.generationStatus === 'GENERATING') throw new Error('Files are already being generated');
   const now = new Date().toISOString();
   const attempt = Number(order.generationAttempt ?? 0) + 1;
-  const history = [...(order.history ?? []), { status: 'GENERATING_FILES', at: now, actor: 'admin', note: 'Retry generation' }];
-  await updateOrder(order.orderId, {
-    status: 'GENERATING_FILES',
-    updatedAt: now,
+  const preserve = fulfillmentPreserved(order.status);
+  const updates: Record<string, unknown> = {
+    generationStatus: 'GENERATING',
     generationAttempt: attempt,
-    history,
-    errorMessage: null,
-    outputKey: null,
-  }, 'attribute_exists(orderId)');
+    generationError: null,
+    updatedAt: now,
+  };
+  if (!preserve) {
+    updates.status = 'GENERATING_FILES';
+    updates.history = [...(order.history ?? []), { status: 'GENERATING_FILES', at: now, actor: 'admin', note: order.outputKey ? 'Regenerate files' : 'Generate files' }];
+  }
+  await updateOrder(order.orderId, updates, 'attribute_exists(orderId) AND (attribute_not_exists(#gs) OR #gs <> :generating)', {
+    ':generating': 'GENERATING',
+  }, { '#gs': 'generationStatus' });
   await enqueueGeneration(order.orderId, attempt);
-  return summary({ ...order, status: 'GENERATING_FILES', updatedAt: now, errorMessage: undefined });
+  return summary({
+    ...order,
+    status: preserve ? order.status : 'GENERATING_FILES',
+    generationStatus: 'GENERATING',
+    updatedAt: now,
+    errorMessage: undefined,
+  });
 }
