@@ -92,6 +92,7 @@ def write_diff(path: Path, cols: int, rows: int, delta: list[float], limit: floa
 def summarise(ours: list[float], reference: list[float], cols: int, rows: int) -> tuple[dict[str, float], list[float]]:
     absolute = 0.0
     worst = 0.0
+    withinLayer = 0
     count = 0
     errors: list[float] = []
     delta = [0.0] * (cols * rows)
@@ -109,6 +110,8 @@ def summarise(ours: list[float], reference: list[float], cols: int, rows: int) -
             errors.append(error)
             absolute += error
             count += 1
+            if error <= 0.04:
+                withinLayer += 1
             if error > worst:
                 worst = error
     errors.sort()
@@ -126,6 +129,7 @@ def summarise(ours: list[float], reference: list[float], cols: int, rows: int) -
         'p95AbsMm': percentile(0.95),
         'p99AbsMm': percentile(0.99),
         'maxAbsMm': round(worst, 6),
+        'withinOneLayerPct': round(100 * withinLayer / count, 2) if count else None,
     }, delta
 
 
@@ -134,6 +138,10 @@ def main() -> None:
     parser.add_argument('--reference-dir', type=Path, default=Path('/tmp/example-dogs'))
     parser.add_argument('--out', type=Path, default=Path('/tmp/example-relief-report'))
     parser.add_argument('--max-depth', default='2')
+    parser.add_argument('--example', default='pink-doggo')
+    parser.add_argument('--right-name', default='')
+    parser.add_argument('--back-name', default='')
+    parser.add_argument('--left-name', default='')
     parser.add_argument('--scale', type=float, default=0.15, help='Diff image clips at this many millimetres')
     parser.add_argument('--skip-generate', action='store_true')
     args = parser.parse_args()
@@ -144,11 +152,17 @@ def main() -> None:
             'npx', 'tsx', 'scripts/export-example-faces.ts',
             '--out', str(generated),
             '--max-depth', str(args.max_depth),
+            '--example', args.example,
         ], cwd=WEB)
     manifest = json.loads((generated / 'manifest.json').read_text())
     faces = []
     for face in manifest['faces']:
-        reference_path = args.reference_dir / REFERENCES[face['face']]
+        names = {
+            'right': args.right_name or REFERENCES['right'],
+            'back': args.back_name or REFERENCES['back'],
+            'left': args.left_name or REFERENCES['left'],
+        }
+        reference_path = args.reference_dir / names[face['face']]
         cols = face['cols']
         rows = face['rows']
         width = face['widthMm']

@@ -2,11 +2,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  DRAGON_BOX_FILAMENT_ID,
+  DRAGON_MAX_DEPTH,
+  DRAGON_LAYER_IDS,
+  DRAGON_TD,
   EXAMPLE_BOX_FILAMENT_ID,
   EXAMPLE_LAYER_IDS,
   EXAMPLE_LOGO_FILAMENT_ID,
   EXAMPLE_TD,
   EXAMPLE_TEXT_FILAMENT_ID,
+  dragonEndLayers,
+  dragonLayers,
+  dragonStartDepths,
   exampleEndLayers,
   exampleLayers,
   exampleStartDepths,
@@ -14,6 +21,7 @@ import {
 import { DEFAULT_BOX_FILAMENT_ID, DEFAULT_LOGO_FILAMENT_ID, DEFAULT_TEXT_FILAMENT_ID } from '../box/lidFinish';
 import { MOCK_FILAMENTS } from './filamentCatalogue';
 import { hexToRgb, layerTopMm } from './colourCore';
+import { modelSizeForCrop } from './printGeometry';
 
 const settings = { baseLayerHeight: 0.09, layerHeight: 0.04 };
 
@@ -56,6 +64,39 @@ test('the example lid defaults to sakura pink and the closest catalogue white', 
   assert.equal(DEFAULT_TEXT_FILAMENT_ID, 'deeplee-matte-white');
 });
 
+test('red dragon skips to a black shell and the fire swaps', () => {
+  const layers = dragonLayers(MOCK_FILAMENTS);
+  assert.deepEqual(layers.map((layer) => layer.id), [...DRAGON_LAYER_IDS]);
+  assert.deepEqual(layers.map((layer) => layer.td), DRAGON_LAYER_IDS.map((id) => DRAGON_TD[id]));
+  assert.equal(layers[0]?.name, 'Elegoo PLA Black');
+  assert.equal(layers[0]?.td, 0.5);
+  assert.equal(layers[1]?.name, 'Elegoo PLA Pro Burgundy Red');
+  assert.equal(layers[1]?.td, 2);
+  assert.equal(layers[2]?.name, 'Elegoo PLA Red');
+  assert.equal(layers[2]?.td, 3.4);
+  assert.equal(layers[3]?.name, '3DHoJor PLA Orange');
+  assert.equal(layers[3]?.td, 5);
+  assert.equal(layers[4]?.name, 'Elegoo Matte PLA Sunshine Yellow');
+  assert.equal(layers[4]?.td, 6.2);
+  assert.equal(layers[5]?.id, 'deeplee-matte-white');
+  assert.equal(layers[5]?.td, 5);
+  assert.deepEqual(dragonEndLayers(50), [3, 18, 26, 30, 40, 50]);
+  const starts = dragonStartDepths(settings);
+  assert.deepEqual(starts.map((depth) => Number(depth.toFixed(2))), [0.09, 0.21, 0.81, 1.13, 1.29, 1.69]);
+  assert.equal(DRAGON_BOX_FILAMENT_ID, 'elegoo-pla-black');
+  assert.equal(DRAGON_MAX_DEPTH, 2.01);
+  const header = (file: string) => {
+    const bytes = readFileSync(new URL(`../../public/examples/red-dragon/${file}`, import.meta.url));
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  };
+  const right = header('right-1.png');
+  const back = header('back-2.png');
+  const left = header('left-3.png');
+  assert.deepEqual(modelSizeForCrop(right.width, right.height, 105.45), { widthMm: 94.67, heightMm: 105.45 });
+  assert.deepEqual(modelSizeForCrop(left.width, left.height, 105.45), { widthMm: 94.67, heightMm: 105.45 });
+  assert.deepEqual(modelSizeForCrop(back.width, back.height, 105.45), { widthMm: 82.44, heightMm: 105.45 });
+});
+
 test('the filament seed contains Deeplee Matte White and every other catalogue row', () => {
   const seed = JSON.parse(readFileSync(new URL('../../../aws/seeds/filaments.json', import.meta.url), 'utf8')) as Array<{ filamentId: string; name: string; td: number }>;
   const seedIds = new Set(seed.map((row) => row.filamentId));
@@ -65,4 +106,8 @@ test('the filament seed contains Deeplee Matte White and every other catalogue r
   const white = seed.find((row) => row.filamentId === 'deeplee-matte-white');
   assert.equal(white?.name, 'Deeplee Matte White');
   assert.equal(white?.td, 5);
+  const orange = seed.find((row) => row.filamentId === '3dhojor-pla-orange');
+  assert.equal(orange?.name, '3DHoJor PLA Orange');
+  assert.equal(orange?.td, 5);
+  assert.equal(seed.some((row) => row.filamentId.startsWith('jessie-') || row.filamentId.startsWith('bambulab-')), false);
 });

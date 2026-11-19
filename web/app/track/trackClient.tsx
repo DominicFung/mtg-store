@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { trackOrder, type ShopOrder } from '../lib/shopOrders';
 import FacePreviews from '../components/facePreviews';
 import LidSummary from '../components/lidSummary';
+import StatusTimeline from '../components/statusTimeline';
 
 export default function TrackClient() {
   const params = useSearchParams();
@@ -54,14 +55,9 @@ export default function TrackClient() {
         {order && (
           <article className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
             <p className="font-mono text-xl text-[#e2c275]">{order.orderNumber}</p>
-            <p className="mt-2">Status: {order.status.replaceAll('_', ' ').toLowerCase()}</p>
-            {order.status === 'SHIPPED' && <p>{order.carrier} {order.trackingNumber}</p>}
-            {order.status === 'FAILED' && <p className="text-sm text-amber-200">{order.errorMessage || 'The shop is looking at this order.'}</p>}
-            <ol className="mt-3 space-y-1 text-sm text-gray-300">
-              {(order.history ?? []).map((entry, index) => (
-                <li key={`${entry.at}-${index}`}>{entry.at.slice(0, 16).replace('T', ' ')} · {entry.status.replaceAll('_', ' ').toLowerCase()}{entry.note ? ` · ${entry.note}` : ''}</li>
-              ))}
-            </ol>
+            <StatusTimeline status={order.status} paymentStatus={order.paymentStatus} createdAt={order.createdAt} history={order.history} />
+            {order.status === 'SHIPPED' && <p className="mt-3">{order.carrier} {order.trackingNumber}</p>}
+            {order.status === 'FAILED' && <p className="mt-3 text-sm text-amber-200">{order.errorMessage || 'The shop is looking at this order.'}</p>}
             {order.status === 'DELIVERED' && order.deliveryPhotoUrl && (
               <div className="relative mt-3 aspect-[4/5] overflow-hidden rounded">
                 <img src={order.deliveryPhotoUrl} alt="The box at the door" className="absolute inset-0 h-full w-full object-cover" />

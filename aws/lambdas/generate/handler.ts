@@ -69,6 +69,7 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
     const profile = order.profileSnapshot as NozzleProfile | undefined;
     if (!profile) throw new Error('Order is missing its nozzle profile snapshot');
     const settings = profileToSettings(profile);
+    if (order.artSource === 'dragon') settings.maxDepth = 2.01;
     const rawStops = Array.isArray(order.stops) ? order.stops : [];
     const stops: CoreStop[] = rawStops.map((stop) => {
       const row = stop as Record<string, unknown>;
@@ -92,10 +93,18 @@ async function processRecord(body: string, receiveCount: number): Promise<void> 
     }));
     const lid = isLidFinish(order.lid) ? buildLidPrint(order.lid) : null;
     const zip = await buildOrderZip({ orderNumber: order.orderNumber, settings, stops, faces, lid });
+    const { facesZipBytes } = await import('../orders/facesZip');
+    const facesZip = await facesZipBytes(async (start, end) => zip.subarray(start, end + 1), zip.length);
     await s3.send(new PutObjectCommand({
       Bucket: requiredEnv('ORDER_BUCKET_NAME'),
       Key: keys.zip,
       Body: zip,
+      ContentType: 'application/zip',
+    }));
+    await s3.send(new PutObjectCommand({
+      Bucket: requiredEnv('ORDER_BUCKET_NAME'),
+      Key: keys.facesZip,
+      Body: facesZip,
       ContentType: 'application/zip',
     }));
     const now = new Date().toISOString();

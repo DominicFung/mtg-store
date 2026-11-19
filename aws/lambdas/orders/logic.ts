@@ -428,6 +428,7 @@ export function printSettingsItemFromProfile(profile: NozzleProfile): Record<str
 export function orderObjectKeys(orderId: string): {
   manifest: string;
   zip: string;
+  facesZip: string;
   crops: [string, string, string];
   previews: [string, string, string];
 } {
@@ -435,6 +436,7 @@ export function orderObjectKeys(orderId: string): {
   return {
     manifest: `${prefix}/manifest.json`,
     zip: `${prefix}/output/deck-box.zip`,
+    facesZip: `${prefix}/output/deck-box-faces.zip`,
     crops: [`${prefix}/inputs/crop-1.png`, `${prefix}/inputs/crop-2.png`, `${prefix}/inputs/crop-3.png`],
     previews: [`${prefix}/inputs/preview-1.png`, `${prefix}/inputs/preview-2.png`, `${prefix}/inputs/preview-3.png`],
   };

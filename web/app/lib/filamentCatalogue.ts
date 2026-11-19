@@ -208,6 +208,19 @@ export const MOCK_FILAMENTS: Filament[] = [
     approximate: true,
     type: 'PLA',
   },
+  {
+    id: '3dhojor-pla-orange',
+    name: '3DHoJor PLA Orange',
+    hex: '#F57C20',
+    td: 5,
+    inStock: true,
+    brand: '3DHoJor',
+    material: 'PLA',
+    finish: 'standard',
+    sortOrder: 150,
+    approximate: true,
+    type: 'PLA',
+  },
 ];
 
 /** Bottom to top. Readable on a first preview: dark backing, then lighter coverings. */

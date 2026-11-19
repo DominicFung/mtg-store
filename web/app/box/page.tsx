@@ -25,9 +25,13 @@ import { renderLayeredCrops } from '../lib/renderLayers';
 import { listActiveProfiles, outpaintArt } from '../lib/shopOrders';
 import { usePrintSettings } from '../lib/usePrintSettings';
 import {
-  EXAMPLE_STITCHED,
+  type ExampleId,
+  DRAGON_MAX_DEPTH,
+  dragonEndLayers,
+  dragonLayers,
   exampleEndLayers,
   exampleLayers,
+  exampleStitched,
   loadExampleCrops,
   withDeeplee,
 } from '../lib/exampleDesign';
@@ -66,29 +70,32 @@ export default function Home() {
   const [lidName, setLidName] = useState('');
   const [lidOpen, setLidOpen] = useState(0);
   const [shot, setShot] = useState<string | null>(null);
-  const [exampleOn, setExampleOn] = useState(false);
+  const [exampleId, setExampleId] = useState<ExampleId | null>(null);
+  const exampleOn = exampleId !== null;
   const [cropSkipped, setCropSkipped] = useState(false);
   const [exampleBusy, setExampleBusy] = useState(false);
   const exampleHoldRef = useRef(false);
   const exampleOnRef = useRef(false);
-  const selectExampleRef = useRef<() => void>(() => undefined);
+  const exampleIdRef = useRef<ExampleId | null>(null);
+  const selectExampleRef = useRef<(id: ExampleId) => void>(() => undefined);
   exampleOnRef.current = exampleOn;
+  exampleIdRef.current = exampleId;
   const { filaments, source } = useFilaments();
   const shopFilaments = useMemo(() => withDeeplee(filaments), [filaments]);
   const { settings: fallbackSettings } = usePrintSettings();
   const layersRef = useRef(layers);
   layersRef.current = layers;
   const profile = profiles.find((entry) => entry.id === profileId) ?? profiles[0];
-  const settings = useMemo(
-    () => (profile ? profileToSettings(profile) : fallbackSettings),
-    [profile, fallbackSettings],
-  );
+  const settings = useMemo(() => {
+    const base = profile ? profileToSettings(profile) : fallbackSettings;
+    return exampleId === 'red-dragon' ? { ...base, maxDepth: DRAGON_MAX_DEPTH } : base;
+  }, [profile, fallbackSettings, exampleId]);
   const layerCount = profile?.layerCount ?? colorCoreLayerCount(settings);
 
   const clearExample = () => {
     if (exampleOn) setLidMarkId(DEFAULT_LID_MARK_ID);
     exampleHoldRef.current = false;
-    setExampleOn(false);
+    setExampleId(null);
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -98,7 +105,7 @@ export default function Home() {
     reader.onload = () => {
       if (exampleOnRef.current) setLidMarkId(DEFAULT_LID_MARK_ID);
       exampleHoldRef.current = false;
-      setExampleOn(false);
+      setExampleId(null);
       setColoursTouched(false);
       setImage(reader.result as string);
       setArtUrl(null);
@@ -164,8 +171,9 @@ export default function Home() {
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
-    const useExample = query.get('example') === '1';
-    if (useExample) selectExampleRef.current();
+    const useExample = query.get('example');
+    if (useExample === '1' || useExample === 'pink-doggo') selectExampleRef.current('pink-doggo');
+    if (useExample === 'dragon' || useExample === 'red-dragon') selectExampleRef.current('red-dragon');
     const nextShot = query.get('shot');
     if (!nextShot) return;
     setShot(nextShot);
@@ -246,7 +254,7 @@ export default function Home() {
     size ? modelSizeForCrop(size.width, size.height, settings.height) : null
   ));
   const previewTextures: [string, string, string] = layered[0] ? layered : (crops[0] ? crops : EMPTY_TEXTURES);
-  const lockedBoxId = exampleOn ? BOX_PINK_ID : BOX_BLACK_ID;
+  const lockedBoxId = exampleId === 'pink-doggo' ? BOX_PINK_ID : BOX_BLACK_ID;
   const lidMark = lidMarkById(lidMarkId);
   const boxFilament = filamentById(shopFilaments, lockedBoxId, lockedBoxId);
   const logoFilament = filamentById(shopFilaments, lidMark.logoFilamentId, lidMark.logoFilamentId);
@@ -369,8 +377,8 @@ export default function Home() {
 
   useEffect(() => {
     setStops((current) => {
-      if (exampleHoldRef.current) {
-        const next = exampleEndLayers(layerCount);
+      if (exampleHoldRef.current && exampleIdRef.current) {
+        const next = exampleIdRef.current === 'red-dragon' ? dragonEndLayers(layerCount) : exampleEndLayers(layerCount);
         if (current.length === next.length && current.every((stop, index) => stop === next[index])) return current;
         return next;
       }
@@ -379,36 +387,36 @@ export default function Home() {
     });
   }, [layerCount, layers.length]);
 
-  const selectExample = async () => {
+  const selectExample = async (id: ExampleId) => {
     if (exampleBusy) return;
     setExampleBusy(true);
     setCropError('');
     setFlipError('');
     try {
-      const nextCrops = await loadExampleCrops();
+      const nextCrops = await loadExampleCrops(id);
       exampleHoldRef.current = true;
-      setExampleOn(true);
+      setExampleId(id);
       setCommanderName('');
       setArtUrl(null);
       setSubject(null);
-      setImage(EXAMPLE_STITCHED);
+      setImage(exampleStitched(id));
       setImageToken((current) => current + 1);
       setCropBox(null);
       setColoursTouched(true);
-      setLidMarkId(EXAMPLE_LID_MARK_ID);
-      setLayers(exampleLayers(shopFilaments));
-      setStops(exampleEndLayers(layerCount));
+      setLidMarkId(id === 'pink-doggo' ? EXAMPLE_LID_MARK_ID : DEFAULT_LID_MARK_ID);
+      setLayers(id === 'red-dragon' ? dragonLayers(shopFilaments) : exampleLayers(shopFilaments));
+      setStops(id === 'red-dragon' ? dragonEndLayers(layerCount) : exampleEndLayers(layerCount));
       setCrops(nextCrops);
       setStep(3);
     } catch (error) {
       exampleHoldRef.current = false;
-      setExampleOn(false);
+      setExampleId(null);
       setCropError(error instanceof Error ? error.message : 'Could not load the example');
     } finally {
       setExampleBusy(false);
     }
   };
-  selectExampleRef.current = () => { void selectExample(); };
+  selectExampleRef.current = (id) => { void selectExample(id); };
 
   return (
     <div className="min-h-full overflow-x-clip bg-gradient-to-b from-[#1a1a2e] to-[#16213e] font-serif text-white">
@@ -467,23 +475,38 @@ export default function Home() {
             or start from an example
             <span className="h-px flex-1 bg-white/10" />
           </div>
-          <button
-            type="button"
-            onClick={() => { void selectExample(); }}
-            disabled={exampleBusy}
-            aria-pressed={exampleOn}
-            className={`flex w-full items-center gap-4 rounded-xl border p-3 text-left transition disabled:opacity-60 ${
-              exampleOn ? 'border-[#e2c275] bg-white/10' : 'border-[#e2c275]/40 hover:border-[#e2c275]'
-            }`}
-          >
-            <img src={EXAMPLE_STITCHED} alt="" className="h-20 w-36 shrink-0 rounded-md object-cover sm:w-44" />
-            <span>
-              <span className="block text-base font-semibold text-[#e2c275]">Example</span>
-              <span className="mt-1 block text-xs text-gray-300">
-                {exampleBusy ? 'Loading the three faces…' : 'A finished design. Skips the crop and opens on the colours.'}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => { void selectExample('pink-doggo'); }}
+              disabled={exampleBusy}
+              aria-pressed={exampleId === 'pink-doggo'}
+              className={`flex w-full items-center gap-4 rounded-xl border p-3 text-left transition disabled:opacity-60 ${
+                exampleId === 'pink-doggo' ? 'border-[#e2c275] bg-white/10' : 'border-[#e2c275]/40 hover:border-[#e2c275]'
+              }`}
+            >
+              <img src={exampleStitched('pink-doggo')} alt="" className="h-20 w-28 shrink-0 rounded-md object-cover" />
+              <span>
+                <span className="block text-base font-semibold text-[#e2c275]">Pink Doggo</span>
+                <span className="mt-1 block text-xs text-gray-300">A cozy winter pack in sakura pink, soft as a favourite blanket. Sweet, playful, and ready to curl up on your shelf.</span>
               </span>
-            </span>
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={() => { void selectExample('red-dragon'); }}
+              disabled={exampleBusy}
+              aria-pressed={exampleId === 'red-dragon'}
+              className={`flex w-full items-center gap-4 rounded-xl border p-3 text-left transition disabled:opacity-60 ${
+                exampleId === 'red-dragon' ? 'border-[#e2c275] bg-white/10' : 'border-[#e2c275]/40 hover:border-[#e2c275]'
+              }`}
+            >
+              <img src={exampleStitched('red-dragon')} alt="" className="h-20 w-28 shrink-0 rounded-md object-cover" />
+              <span>
+                <span className="block text-base font-semibold text-[#e2c275]">Red Dragon</span>
+                <span className="mt-1 block text-xs text-gray-300">A fire-breather in black and ember. Fierce scales, a hot wing, and a landscape still burning.</span>
+              </span>
+            </button>
+          </div>
           <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wide text-gray-500">
             <span className="h-px flex-1 bg-white/10" />
             or upload your own art
@@ -571,9 +594,11 @@ export default function Home() {
               <LidFinish
                 filaments={shopFilaments}
                 box={boxFilament}
-                lockedLabel={exampleOn
-                  ? 'The example prints in Elegoo Matte PLA Sakura Pink. This colour is fixed.'
-                  : 'Card art and uploads print in Elegoo PLA Black. This colour is fixed.'}
+                lockedLabel={exampleId === 'pink-doggo'
+                  ? 'Pink Doggo prints in Elegoo Matte PLA Sakura Pink. This colour is fixed.'
+                  : exampleId === 'red-dragon'
+                    ? 'Red Dragon prints in Elegoo PLA Black. This colour is fixed.'
+                    : 'Card art and uploads print in Elegoo PLA Black. This colour is fixed.'}
                 markId={lidMark.id}
                 name={lidName}
                 open={lidOpen}
@@ -621,7 +646,7 @@ export default function Home() {
                 textFilament: textFilament,
                 text: lidName,
               } : null}
-              artSource={exampleOn ? 'example' : artUrl ? 'scryfall' : 'upload'}
+              artSource={exampleId === 'pink-doggo' ? 'example' : exampleId === 'red-dragon' ? 'dragon' : artUrl ? 'scryfall' : 'upload'}
             />
           )}
         </div>

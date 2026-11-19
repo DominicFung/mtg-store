@@ -208,8 +208,8 @@ export default function AdminPage() {
 
   async function download() {
     if (!selected) return;
-    const url = await refreshShopDownload(selected.orderId);
-    setMessage(url ? url : 'Download links are created after the generator finishes. This preview has no print file.');
+    const links = await refreshShopDownload(selected.orderId);
+    setMessage(links.all ? 'A fresh download link is ready on the order page.' : 'Download links are created after the generator finishes. This preview has no print file.');
   }
 }
 

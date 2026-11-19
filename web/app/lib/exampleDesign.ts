@@ -92,9 +92,67 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+export type ExampleId = 'pink-doggo' | 'red-dragon';
+
+export const DRAGON_BOX_FILAMENT_ID = 'elegoo-pla-black';
+/** Reference plates top out at 2.05 mm, which this mesh reaches when max depth is 2.01. */
+export const DRAGON_MAX_DEPTH = 2.01;
+export const DRAGON_STITCHED = '/examples/red-dragon/stitched.png';
+export const DRAGON_FACES = [
+  '/examples/red-dragon/right-1.png',
+  '/examples/red-dragon/back-2.png',
+  '/examples/red-dragon/left-3.png',
+] as const;
+export const DRAGON_LAYER_IDS = [
+  'elegoo-pla-black',
+  'elegoo-pla-pro-burgundy-red',
+  'elegoo-pla-red',
+  '3dhojor-pla-orange',
+  'elegoo-matte-pla-sunshine-yellow',
+  'deeplee-matte-white',
+] as const;
+export const DRAGON_TD: Record<string, number> = {
+  'elegoo-pla-black': 0.5,
+  'elegoo-pla-pro-burgundy-red': 2,
+  'elegoo-pla-red': 3.4,
+  '3dhojor-pla-orange': 5,
+  'elegoo-matte-pla-sunshine-yellow': 6.2,
+  'deeplee-matte-white': 5,
+};
+const DRAGON_END_LAYERS = [3, 18, 26, 30, 40];
+export const DRAGON_START_LAYERS = [1, 4, 19, 27, 31, 41];
+
+export function dragonEndLayers(layerCount: number): number[] {
+  return clampStops([...DRAGON_END_LAYERS, layerCount], layerCount);
+}
+
+export function dragonLayers(filaments: readonly Filament[]): Filament[] {
+  const byId = new Map<string, Filament>();
+  for (const filament of [...MOCK_FILAMENTS, DEEPLEE_MATTE_WHITE, ...filaments]) {
+    byId.set(filament.id, filament);
+  }
+  return DRAGON_LAYER_IDS.map((id) => {
+    const filament = byId.get(id);
+    if (!filament) throw new Error(`Missing filament ${id}`);
+    return { ...filament, td: DRAGON_TD[id] ?? filament.td };
+  });
+}
+
+export function dragonStartDepths(settings: Pick<LayerSettings, 'baseLayerHeight' | 'layerHeight'>): number[] {
+  return DRAGON_START_LAYERS.map((layer) => layerTopMm(layer, settings));
+}
+
+export function exampleFaces(id: ExampleId): readonly [string, string, string] {
+  return id === 'red-dragon' ? DRAGON_FACES : EXAMPLE_FACES;
+}
+
+export function exampleStitched(id: ExampleId): string {
+  return id === 'red-dragon' ? DRAGON_STITCHED : EXAMPLE_STITCHED;
+}
+
 /** PNG data URLs, so the order upload can read the same bytes as a customer crop. */
-export async function loadExampleCrops(): Promise<[string, string, string]> {
-  const urls = await Promise.all(EXAMPLE_FACES.map(async (path) => {
+export async function loadExampleCrops(id: ExampleId = 'pink-doggo'): Promise<[string, string, string]> {
+  const urls = await Promise.all(exampleFaces(id).map(async (path) => {
     const response = await fetch(path);
     if (!response.ok) throw new Error('Could not load the example');
     return blobToDataUrl(await response.blob());

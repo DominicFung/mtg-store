@@ -188,6 +188,7 @@ type OrderDetail @aws_api_key @aws_cognito_user_pools(cognito_groups: ["admin"])
   previewUrls: [String!]!
   lid: OrderLid
   downloadUrl: String
+  facesDownloadUrl: String
   downloadExpiresAt: String
   profileSnapshotJson: String
   deliveryPhotoUrl: String
