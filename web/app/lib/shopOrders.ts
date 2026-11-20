@@ -334,6 +334,7 @@ export async function listShopOrders(filter: { status?: string; email?: string }
 
 export async function loadOrder(orderId: string): Promise<ShopOrder | null> {
   if (shopConfigured() && adminToken()) {
+    // outputKey is not a GraphQL field. The page treats generatedFiles plus generationStatus as the source of truth.
     const detail = await gql<{ getAdminOrder: ShopOrder & { previewUrls?: string[] } }>(
       `query Get($orderId: ID!) {
         getAdminOrder(orderId: $orderId) {

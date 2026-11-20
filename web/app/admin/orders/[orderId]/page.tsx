@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import FacePreviews from '../../../components/facePreviews';
 import StatusTimeline from '../../../components/statusTimeline';
 import LidSummary from '../../../components/lidSummary';
 import AdminSignInCard from '../../signInCard';
+import { pollPrintFiles } from '../../../lib/printFilePoll';
 import {
   adminConfigured,
   adminSignOut,
@@ -28,6 +29,9 @@ export default function AdminOrderPage() {
   const [preview, setPreview] = useState(false);
   const [order, setOrder] = useState<ShopOrder | null>(null);
   const [error, setError] = useState('');
+  const [pollNote, setPollNote] = useState('');
+  const [pollEpoch, setPollEpoch] = useState(0);
+  const pollToken = useRef(0);
   const [downloadUrl, setDownloadUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -56,6 +60,27 @@ export default function AdminOrderPage() {
       cancelled = true;
     };
   }, [signedIn, preview, orderId]);
+
+  useEffect(() => {
+    if (!(signedIn || preview) || !orderId || order?.generationStatus !== 'GENERATING') return undefined;
+    const token = pollToken.current + 1;
+    pollToken.current = token;
+    let stopped = false;
+    setPollNote('');
+    void pollPrintFiles({
+      load: () => loadOrder(orderId),
+      shouldStop: () => stopped || pollToken.current !== token,
+    }).then((result) => {
+      if (stopped || pollToken.current !== token) return;
+      if (result.order) setOrder(result.order);
+      if (result.outcome === 'timeout') {
+        setPollNote('Still generating. This page stopped checking. Use Check again, or refresh in a moment.');
+      }
+    }).catch(() => undefined);
+    return () => {
+      stopped = true;
+    };
+  }, [signedIn, preview, orderId, order?.generationStatus, pollEpoch]);
 
   const reload = async () => {
     if (!orderId) return;
@@ -109,7 +134,8 @@ export default function AdminOrderPage() {
     setError('');
     try {
       await retryShopOrder(orderId);
-      await reload();
+      setOrder((current) => (current ? { ...current, generationStatus: 'GENERATING', generationError: undefined } : current));
+      setPollNote('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not start file generation');
     } finally {
@@ -213,7 +239,15 @@ export default function AdminOrderPage() {
                 ))}
               </ol>
             )}
-            <PrintFiles order={order} busy={busy} downloadUrl={downloadUrl} onDownload={(which) => { void download(which); }} onGenerate={() => { void generate(); }} />
+            <PrintFiles
+              order={order}
+              busy={busy}
+              downloadUrl={downloadUrl}
+              pollNote={pollNote}
+              onDownload={(which) => { void download(which); }}
+              onGenerate={() => { void generate(); }}
+              onRecheck={() => { setPollNote(''); setPollEpoch((current) => current + 1); }}
+            />
           </article>
         )}
       </div>
@@ -238,34 +272,44 @@ function PrintFiles({
   order,
   busy,
   downloadUrl,
+  pollNote,
   onDownload,
   onGenerate,
+  onRecheck,
 }: {
   order: ShopOrder;
   busy: boolean;
   downloadUrl: string;
+  pollNote: string;
   onDownload: (which: 'faces' | 'all') => void;
   onGenerate: () => void;
+  onRecheck: () => void;
 }) {
   const files = (order.generatedFiles ?? []).map((key) => key.split('/').pop() || key);
-  const ready = files.length > 0 || Boolean(order.outputKey);
-  const failed = order.generationStatus === 'FAILED' || Boolean(order.generationError);
+  const generating = order.generationStatus === 'GENERATING';
+  const ready = !generating && (files.length > 0 || Boolean(order.outputKey));
+  const failed = !generating && (order.generationStatus === 'FAILED' || Boolean(order.generationError));
   return (
     <section>
       <h2 className="text-sm font-semibold text-[#e2c275]">Print files</h2>
       <p className="mt-1 text-xs text-gray-400">They stay in the private order bucket and are not deleted. A download link is created only for this signed-in session and expires in a few hours.</p>
-      {!ready && !failed && <p className="mt-3 text-sm text-amber-100">Files not generated yet.</p>}
+      {generating && !pollNote && <p className="mt-3 text-sm text-gray-300">Generating print files…</p>}
+      {generating && pollNote && <p className="mt-3 text-sm text-amber-100">{pollNote}</p>}
+      {!ready && !failed && !generating && <p className="mt-3 text-sm text-amber-100">Files not generated yet.</p>}
       {failed && <p className="mt-3 text-sm text-amber-100">Generation failed: {order.generationError || order.errorMessage || 'unknown error'}</p>}
-      {order.generationStatus === 'GENERATING' && <p className="mt-2 text-sm text-gray-300">Generating print files…</p>}
-      {files.length > 0 && (
+      {files.length > 0 && !generating && (
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
           {files.map((name) => <li key={name}>{name}</li>)}
         </ul>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={onGenerate} disabled={busy || order.generationStatus === 'GENERATING'} className="min-h-11 rounded-md border border-white/20 px-4 text-sm">
-          {ready || failed ? 'Regenerate files' : 'Generate files'}
-        </button>
+        {pollNote ? (
+          <button type="button" onClick={onRecheck} className="min-h-11 rounded-md border border-white/20 px-4 text-sm">Check again</button>
+        ) : (
+          <button type="button" onClick={onGenerate} disabled={busy || generating} className="min-h-11 rounded-md border border-white/20 px-4 text-sm disabled:opacity-50">
+            {ready || failed ? 'Regenerate files' : 'Generate files'}
+          </button>
+        )}
         <button type="button" onClick={() => onDownload('faces')} disabled={busy || !ready} className="min-h-11 rounded-md bg-[#e2c275] px-4 text-sm font-semibold text-black disabled:opacity-50">
           {busy ? 'Preparing download…' : 'Download'}
         </button>
